@@ -1,20 +1,65 @@
+"""RSI Mean Reversion Strategy."""
+
+from typing import Any, Dict
+
 import pandas as pd
+import ta
 
-def rsi_signals(
-    df: pd.DataFrame,
-    period: int = 14,
-    oversold: float = 30,
-    overbought: float = 70,
-) -> pd.DataFrame:
-    """Add RSI and mean-reversion signals to an OHLCV dataframe."""
-    data = df.copy()
-    delta = data["close"].diff()
-    gain = delta.clip(lower=0).rolling(period).mean()
-    loss = (-delta.clip(upper=0)).rolling(period).mean()
-    rs = gain / loss.replace(0, pd.NA)
-    data["rsi"] = 100 - (100 / (1 + rs))
+from strategies.base import BaseStrategy, Signal
 
-    data["signal"] = 0
-    data.loc[data["rsi"] < oversold, "signal"] = 1
-    data.loc[data["rsi"] > overbought, "signal"] = -1
-    return data
+
+class RSIMeanReversionStrategy(BaseStrategy):
+    """
+    Buy when RSI is oversold, sell when overbought.
+    Includes trailing stop loss and cooldown timer.
+    """
+
+    def get_default_parameters(self) -> Dict[str, Any]:
+        return {
+            "rsi_period": 14,
+            "oversold": 30,
+            "overbought": 70,
+            "trailing_stop_pct": 0.015,
+            "cooldown_bars": 5,
+            "position_size_pct": 0.1,
+        }
+
+    def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
+        params = {**self.get_default_parameters(), **self.parameters}
+        period = params["rsi_period"]
+        oversold = params["oversold"]
+        overbought = params["overbought"]
+        cooldown = params["cooldown_bars"]
+        trail_pct = params["trailing_stop_pct"]
+
+        df = df.copy()
+        df["rsi"] = ta.momentum.RSIIndicator(df["close"], window=period).rsi()
+        df["signal"] = Signal.HOLD.value
+        df["last_signal_bar"] = 0
+
+        position = 0
+        trailing_stop = None
+        last_signal_idx = -cooldown
+
+        for i in range(period, len(df)):
+            if i - last_signal_idx < cooldown:
+                continue
+
+            rsi = df.iloc[i]["rsi"]
+            price = df.iloc[i]["close"]
+
+            if position == 0 and rsi < oversold:
+                df.iloc[i, df.columns.get_loc("signal")] = Signal.BUY.value
+                position = 1
+                trailing_stop = price * (1 - trail_pct)
+                last_signal_idx = i
+            elif position == 1:
+                trailing_stop = max(trailing_stop, price * (1 - trail_pct))
+                if rsi > overbought or price < trailing_stop:
+                    df.iloc[i, df.columns.get_loc("signal")] = Signal.SELL.value
+                    position = 0
+                    trailing_stop = None
+                    last_signal_idx = i
+
+        df["trailing_stop"] = trailing_stop
+        return df
