@@ -11,6 +11,7 @@ from app.brokers.base import BrokerOrderRequest, BrokerAdapter
 from app.models.portfolio import Portfolio
 from app.services.risk import RiskService
 from app.services.order_lifecycle import OrderStatusMapper
+from app.services.audit import log_audit
 
 
 class ExecutionService:
@@ -91,9 +92,27 @@ class ExecutionService:
             order.status = OrderStatusMapper.from_broker_status(result.status)
             if order.status is OrderStatus.REJECTED:
                 order.rejection_reason = result.status[:512]
+            await log_audit(
+                self.db,
+                action="order.submitted",
+                resource="order",
+                resource_id=str(order.id),
+                details={
+                    "broker_order_id": order.broker_order_id,
+                    "status": order.status.value,
+                    "mode": order.mode.value,
+                },
+            )
         except Exception as exc:
             order.status = OrderStatus.FAILED
             order.rejection_reason = str(exc)[:512]
+            await log_audit(
+                self.db,
+                action="order.execution_failed",
+                resource="order",
+                resource_id=str(order.id),
+                details={"error": str(exc)[:512], "mode": order.mode.value},
+            )
             raise
 
         return order
