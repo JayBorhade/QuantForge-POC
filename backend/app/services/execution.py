@@ -7,16 +7,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.order import ExecutionMode, Order, OrderSide, OrderStatus, OrderType
+from app.brokers.base import BrokerOrderRequest, BrokerAdapter
 from app.models.portfolio import Portfolio
 from app.services.risk import RiskService
 
 
-class BrokerExecutor(Protocol):
-    async def submit_order(self, order: Order) -> str: ...
-
-
 class ExecutionService:
-    def __init__(self, db: AsyncSession, broker: BrokerExecutor | None = None):
+    def __init__(self, db: AsyncSession, broker: BrokerAdapter | None = None):
         self.db = db
         self.broker = broker
 
@@ -79,7 +76,17 @@ class ExecutionService:
 
         order.status = OrderStatus.SUBMITTED
         try:
-            order.broker_order_id = await self.broker.submit_order(order)
+            result = await self.broker.submit_order(
+                BrokerOrderRequest(
+                    client_order_id=order.client_order_id,
+                    symbol=order.symbol,
+                    side=order.side,
+                    order_type=order.order_type,
+                    quantity=order.quantity,
+                    limit_price=order.limit_price,
+                )
+            )
+            order.broker_order_id = result.broker_order_id
         except Exception as exc:
             order.status = OrderStatus.FAILED
             order.rejection_reason = str(exc)[:512]
