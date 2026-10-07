@@ -128,7 +128,16 @@ class BacktestEngine:
             if position > 0:
                 low = float(row["low"]) if not pd.isna(row.get("low")) else price
                 high = float(row["high"]) if not pd.isna(row.get("high")) else price
-                if stop_loss is not None and low <= stop_loss:
+                # If the market opens through a stop, the stop cannot guarantee
+                # its trigger price; use the worse opening price to model gap risk.
+                if stop_loss is not None and open_price <= stop_loss:
+                    exit_price = open_price * (1.0 - slippage_pct)
+                    exit_reason = "stop_loss_gap"
+                elif take_profit is not None and open_price >= take_profit:
+                    # A favorable gap can execute at the available open.
+                    exit_price = open_price * (1.0 - slippage_pct)
+                    exit_reason = "take_profit_gap"
+                elif stop_loss is not None and low <= stop_loss:
                     exit_price = stop_loss * (1.0 - slippage_pct)
                     exit_reason = "stop_loss"
                 elif take_profit is not None and high >= take_profit:
