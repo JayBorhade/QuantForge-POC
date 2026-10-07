@@ -50,7 +50,7 @@ class ExecutionService:
 
         order = Order(
             portfolio_id=portfolio.id,
-            symbol=symbol.strip().upper(),
+            symbol=normalized_symbol,
             side=side,
             order_type=order_type,
             mode=mode,
