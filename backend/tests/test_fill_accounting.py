@@ -49,25 +49,10 @@ class FillAccountingTests(unittest.TestCase):
         db = MagicMock()
         db.execute = AsyncMock()
         db.flush = AsyncMock()
-        created_positions = []
-
-        def add(value):
-            if isinstance(value, Position):
-                created_positions.append(value)
-
-        db.add.side_effect = add
-        execute_results = [
-            Result(order), Result(portfolio), Result(None),
-            Result(order), Result(portfolio), None,
+        db.execute.side_effect = [
+            Result(order), Result(portfolio), Result(position),
+            Result(order), Result(portfolio), Result(position),
         ]
-
-        async def execute(*args, **kwargs):
-            result = execute_results.pop(0)
-            if result is None:
-                return Result(created_positions[0])
-            return result
-
-        db.execute.side_effect = execute
 
         service = FillService(db)
         asyncio.run(service.apply_fill(order_id=order.id, quantity=Decimal("4"), price=Decimal("100")))
