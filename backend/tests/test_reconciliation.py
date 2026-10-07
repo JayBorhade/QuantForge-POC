@@ -20,7 +20,7 @@ class ReconciliationTests(unittest.TestCase):
         order = MagicMock(
             status=OrderStatus.SUBMITTED,
             broker_order_id="paper-1",
-            created_at=datetime.now(timezone.utc) - timedelta(minutes=10),
+            updated_at=datetime.now(timezone.utc) - timedelta(minutes=10),
         )
         result = MagicMock()
         result.scalars.return_value.all.return_value = [order]
