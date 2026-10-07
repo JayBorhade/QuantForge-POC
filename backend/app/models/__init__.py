@@ -27,9 +27,11 @@ __all__ = [
     "Position",
     "ExecutionFill",
     "CashLedgerEntry",
+    "RiskLimit",
 ]
 
 from app.models.order import Order
 from app.models.position import Position
 from app.models.execution_fill import ExecutionFill
 from app.models.cash_ledger import CashLedgerEntry
+from app.models.risk_limit import RiskLimit
