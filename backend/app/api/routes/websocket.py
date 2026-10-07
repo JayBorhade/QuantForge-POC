@@ -46,17 +46,22 @@ def init_websocket_manager():
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: str = ""):
-    user_id = "anonymous"
-    if token:
-        try:
-            payload = jwt.decode(
-                token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
-            )
-            if payload.get("type") == "access":
-                user_id = payload.get("sub", "anonymous")
-        except Exception:
+    # Live/trading updates are user-scoped; never create an anonymous connection.
+    if not token:
+        await websocket.close(code=4001)
+        return
+
+    try:
+        payload = jwt.decode(
+            token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
+        )
+        if payload.get("type") != "access" or not payload.get("sub"):
             await websocket.close(code=4001)
             return
+        user_id = str(payload["sub"])
+    except Exception:
+        await websocket.close(code=4001)
+        return
 
     await manager.connect(user_id, websocket)
     init_websocket_manager()
