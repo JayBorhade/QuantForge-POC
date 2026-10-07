@@ -28,6 +28,10 @@ class BacktestEngine:
         parameters: dict = None,
     ) -> Dict[str, Any]:
         parameters = parameters or {}
+        if start_date >= end_date:
+            raise ValueError("start_date must be earlier than end_date")
+        if not np.isfinite(initial_capital) or initial_capital <= 0:
+            raise ValueError("initial_capital must be a finite positive number")
         df = self._fetch_historical(symbol, start_date, end_date)
         if df.empty:
             return {"error": "No data available for backtest period"}
@@ -71,9 +75,14 @@ class BacktestEngine:
         equity_curve: List[Dict[str, Any]] = []
 
         position_size_pct = float(self._strategy_parameters.get("position_size_pct", 0.10))
-        position_size_pct = min(max(position_size_pct, 0.0), 1.0)
         transaction_cost_pct = float(self._strategy_parameters.get("transaction_cost_pct", 0.001))
         slippage_pct = float(self._strategy_parameters.get("slippage_pct", 0.0005))
+        if not np.isfinite(position_size_pct) or not 0 < position_size_pct <= 1:
+            raise ValueError("position_size_pct must be in (0, 1]")
+        if not np.isfinite(transaction_cost_pct) or not 0 <= transaction_cost_pct < 1:
+            raise ValueError("transaction_cost_pct must be in [0, 1)")
+        if not np.isfinite(slippage_pct) or not 0 <= slippage_pct < 1:
+            raise ValueError("slippage_pct must be in [0, 1)")
 
         pending_signal = "hold"
         pending_stop = None
