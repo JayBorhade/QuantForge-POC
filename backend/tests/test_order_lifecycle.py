@@ -23,21 +23,25 @@ class OrderLifecycleTests(unittest.TestCase):
     def test_cancel_calls_broker_and_updates_order(self):
         db = MagicMock()
         db.flush = AsyncMock()
+        locked = MagicMock(status=OrderStatus.SUBMITTED, broker_order_id="paper-1")
+        db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: locked))
         broker = MagicMock()
         broker.cancel_order = AsyncMock()
-        order = MagicMock(status=OrderStatus.SUBMITTED, broker_order_id="paper-1")
+        order = MagicMock(id="order-1")
 
         result = asyncio.run(OrderLifecycleService(db, broker).cancel(order))
 
         self.assertIs(result, order)
-        self.assertEqual(order.status, OrderStatus.CANCELLED)
+        self.assertEqual(locked.status, OrderStatus.CANCELLED)
         broker.cancel_order.assert_awaited_once_with("paper-1")
         db.flush.assert_awaited_once()
 
     def test_terminal_order_cannot_be_cancelled(self):
         db = MagicMock()
+        locked = MagicMock(status=OrderStatus.FILLED, broker_order_id="paper-1")
+        db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: locked))
         broker = MagicMock()
-        order = MagicMock(status=OrderStatus.FILLED, broker_order_id="paper-1")
+        order = MagicMock(id="order-1")
 
         with self.assertRaises(ValueError):
             asyncio.run(OrderLifecycleService(db, broker).cancel(order))
