@@ -92,27 +92,27 @@ class OrderLifecycleService:
             raise ValueError("Cannot reconcile an order without a broker order id")
         broker_result = await self.broker.get_order(locked.broker_order_id)
         new_status = OrderStatusMapper.from_broker_status(broker_result.status)
-        if locked.status is OrderStatus.FILLED and new_status is not OrderStatus.FILLED:
+        previous_status = locked.status
+        if previous_status is OrderStatus.FILLED and new_status is not OrderStatus.FILLED:
             raise ValueError("Broker reconciliation attempted to regress a filled order")
-        if locked.status is OrderStatus.CANCELLED and new_status is not OrderStatus.CANCELLED:
+        if previous_status is OrderStatus.CANCELLED and new_status is not OrderStatus.CANCELLED:
             raise ValueError("Broker reconciliation attempted to regress a cancelled order")
         if new_status is OrderStatus.FILLED and locked.filled_quantity != locked.quantity:
             raise ValueError("Broker reports filled order before local fill accounting is complete")
         locked.status = new_status
         if new_status is OrderStatus.REJECTED:
             locked.rejection_reason = broker_result.status[:512]
-        if new_status is not locked.status:
+        if new_status is not previous_status:
             await log_audit(
                 self.db,
                 action="order.reconciled",
                 resource="order",
                 resource_id=str(locked.id),
                 details={
-                    "previous_status": locked.status.value,
+                    "previous_status": previous_status.value,
                     "new_status": new_status.value,
                     "broker_order_id": locked.broker_order_id,
                 },
             )
-        locked.status = new_status
         await self.db.flush()
         return locked
