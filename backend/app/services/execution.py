@@ -1,8 +1,6 @@
 """Execution service with paper/live safety boundaries."""
 
 from decimal import Decimal
-from typing import Protocol
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
