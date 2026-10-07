@@ -18,23 +18,41 @@ interface Portfolio {
   win_rate: number;
 }
 
+interface RecentTrade {
+  symbol?: unknown;
+  side?: unknown;
+  pnl?: unknown;
+  status?: unknown;
+}
+
+interface PortfolioAnalytics {
+  allocation?: {
+    equity?: number;
+    cash?: number;
+  };
+  recent_trades?: RecentTrade[];
+}
+
 const COLORS = ["#3b82f6", "#10b981"];
 
 export default function PortfolioPage() {
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
-  const [analytics, setAnalytics] = useState<Record<string, unknown> | null>(null);
+  const [analytics, setAnalytics] = useState<PortfolioAnalytics | null>(null);
 
   useEffect(() => {
-    portfolioApi.list().then((r) => {
-      setPortfolios(r.data);
-      if (r.data[0]) {
-        portfolioApi.analytics(r.data[0].id).then((a) => setAnalytics(a.data));
-      }
-    }).catch(() => setPortfolios([]));
+    portfolioApi
+      .list()
+      .then((r) => {
+        setPortfolios(r.data);
+        if (r.data[0]) {
+          portfolioApi.analytics(r.data[0].id).then((a) => setAnalytics(a.data));
+        }
+      })
+      .catch(() => setPortfolios([]));
   }, []);
 
   const p = portfolios[0];
-  const allocation = analytics?.allocation as { equity?: number; cash?: number } | undefined;
+  const allocation = analytics?.allocation;
   const pieData = allocation
     ? [
         { name: "Invested", value: allocation.equity || 0 },
@@ -84,12 +102,20 @@ export default function PortfolioPage() {
           ) : (
             <p className="text-sm text-muted-foreground">Sign up creates a Main Portfolio automatically.</p>
           )}
-          <Button variant="outline" className="w-full" onClick={() => portfolioApi.create({ name: "Growth" }).then(() => portfolioApi.list().then((r) => setPortfolios(r.data)))}>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() =>
+              portfolioApi
+                .create({ name: "Growth" })
+                .then(() => portfolioApi.list().then((r) => setPortfolios(r.data)))
+            }
+          >
             Add Portfolio
           </Button>
         </Card>
       </div>
-      {analytics?.recent_trades && (
+      {Array.isArray(analytics?.recent_trades) && analytics.recent_trades.length > 0 && (
         <Card className="mt-6 p-6">
           <h3 className="font-semibold mb-4">Recent Trades</h3>
           <div className="overflow-x-auto">
@@ -103,7 +129,7 @@ export default function PortfolioPage() {
                 </tr>
               </thead>
               <tbody>
-                {(analytics.recent_trades as Array<Record<string, unknown>>).map((t, i) => (
+                {analytics.recent_trades.map((t, i) => (
                   <tr key={i} className="border-t border-white/5">
                     <td className="py-2 font-mono">{String(t.symbol)}</td>
                     <td className="capitalize">{String(t.side)}</td>
