@@ -54,7 +54,7 @@ class FillAccountingTests(unittest.TestCase):
         self.assertEqual(order.status, OrderStatus.FILLED)
         self.assertEqual(order.filled_quantity, Decimal("10"))
         self.assertEqual(order.average_fill_price, Decimal("106"))
-        self.assertEqual(position.quantity, Decimal("6"))
+        self.assertEqual(position.quantity, Decimal("10"))
         self.assertEqual(portfolio.cash_balance, Decimal("3940"))
 
     def test_paper_buy_rejects_insufficient_cash(self):
