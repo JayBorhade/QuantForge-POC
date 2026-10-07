@@ -60,9 +60,8 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("notes", sa.Text(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("email"),
-    )
-    op.create_index("ix_users_email", "users", ["email"], unique=False)
+            )
+    op.create_index("ix_users_email", "users", ["email"], unique=True)
 
     op.create_table(
         "user_sessions",
@@ -81,9 +80,8 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("refresh_token_jti"),
-    )
-    op.create_index("ix_user_sessions_refresh_token_jti", "user_sessions", ["refresh_token_jti"], unique=False)
+            )
+    op.create_index("ix_user_sessions_refresh_token_jti", "user_sessions", ["refresh_token_jti"], unique=True)
     op.create_index("ix_user_sessions_user_id", "user_sessions", ["user_id"], unique=False)
 
     op.create_table(
@@ -136,7 +134,7 @@ def upgrade() -> None:
         sa.Column("access_token", sa.Text(), nullable=True),
         sa.Column("refresh_token", sa.Text(), nullable=True),
         sa.Column("token_expires_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("is_active", sa.Boolean(), nullable=True),
+        sa.Column("is_active", sa.Boolean(), nullable=False),
         sa.Column("last_synced_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
@@ -185,15 +183,15 @@ def upgrade() -> None:
         "strategy_runs",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("strategy_id", postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column("mode", runmode, nullable=True),
-        sa.Column("status", runstatus, nullable=True),
+        sa.Column("mode", runmode, nullable=False),
+        sa.Column("status", runstatus, nullable=False),
         sa.Column("start_date", sa.DateTime(timezone=True), nullable=True),
         sa.Column("end_date", sa.DateTime(timezone=True), nullable=True),
         sa.Column("sharpe_ratio", sa.Numeric(precision=10, scale=4), nullable=True),
         sa.Column("max_drawdown", sa.Numeric(precision=10, scale=4), nullable=True),
         sa.Column("total_return", sa.Numeric(precision=10, scale=4), nullable=True),
         sa.Column("win_rate", sa.Numeric(precision=8, scale=4), nullable=True),
-        sa.Column("total_trades", sa.Integer(), nullable=True),
+        sa.Column("total_trades", sa.Integer(), nullable=False),
         sa.Column("results", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
@@ -211,15 +209,15 @@ def upgrade() -> None:
         sa.Column("strategy_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("symbol", sa.String(length=32), nullable=False),
         sa.Column("side", tradeside, nullable=False),
-        sa.Column("status", tradestatus, nullable=True),
-        sa.Column("mode", trademode, nullable=True),
+        sa.Column("status", tradestatus, nullable=False),
+        sa.Column("mode", trademode, nullable=False),
         sa.Column("quantity", sa.Numeric(precision=18, scale=8), nullable=False),
         sa.Column("entry_price", sa.Numeric(precision=18, scale=8), nullable=True),
         sa.Column("exit_price", sa.Numeric(precision=18, scale=8), nullable=True),
         sa.Column("stop_loss", sa.Numeric(precision=18, scale=8), nullable=True),
         sa.Column("take_profit", sa.Numeric(precision=18, scale=8), nullable=True),
         sa.Column("pnl", sa.Numeric(precision=18, scale=4), nullable=True),
-        sa.Column("fees", sa.Numeric(precision=18, scale=4), nullable=True),
+        sa.Column("fees", sa.Numeric(precision=18, scale=4), nullable=False),
         sa.Column("broker_order_id", sa.String(length=128), nullable=True),
         sa.Column("notes", sa.Text(), nullable=True),
         sa.Column("opened_at", sa.DateTime(timezone=True), nullable=True),
@@ -230,16 +228,15 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_trades_portfolio_id", "trades", ["portfolio_id"], unique=False)
-    op.create_index("ix_trades_strategy_id", "trades", ["strategy_id"], unique=False)
     op.create_index("ix_trades_symbol", "trades", ["symbol"], unique=False)
 
     op.create_table(
         "subscriptions",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column("plan", plantier, nullable=True),
-        sa.Column("status", subscriptionstatus, nullable=True),
-        sa.Column("price", sa.Numeric(precision=10, scale=2), nullable=True),
+        sa.Column("plan", plantier, nullable=False),
+        sa.Column("status", subscriptionstatus, nullable=False),
+        sa.Column("price", sa.Numeric(precision=10, scale=2), nullable=False),
         sa.Column("stripe_customer_id", sa.String(length=128), nullable=True),
         sa.Column("stripe_subscription_id", sa.String(length=128), nullable=True),
         sa.Column("current_period_start", sa.DateTime(timezone=True), nullable=True),
@@ -277,7 +274,6 @@ def downgrade() -> None:
     op.drop_table("audit_logs")
     op.drop_table("subscriptions")
     op.drop_index("ix_trades_symbol", table_name="trades")
-    op.drop_index("ix_trades_strategy_id", table_name="trades")
     op.drop_index("ix_trades_portfolio_id", table_name="trades")
     op.drop_table("trades")
     op.drop_index("ix_strategy_runs_strategy_id", table_name="strategy_runs")
