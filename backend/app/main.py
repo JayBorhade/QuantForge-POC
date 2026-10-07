@@ -12,9 +12,7 @@ from slowapi.util import get_remote_address
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.core.csrf import CSRF_COOKIE, is_csrf_exempt, set_csrf_cookie, validate_csrf
-from app.db.base import Base
 from app.db.session import engine
-import app.models  # noqa: F401 — register all models before metadata operations
 
 settings = get_settings()
 limiter = Limiter(key_func=get_remote_address, default_limits=[f"{settings.rate_limit_per_minute}/minute"])
@@ -25,8 +23,6 @@ async def lifespan(app: FastAPI):
     from app.api.routes.websocket import init_websocket_manager
 
     init_websocket_manager()
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
     yield
     await engine.dispose()
 

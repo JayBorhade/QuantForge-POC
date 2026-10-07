@@ -48,6 +48,13 @@ jobs:
           SECRET_KEY: ci-secret-key-for-testing-min-32-chars!!
           JWT_SECRET_KEY: ci-jwt-secret-key-for-testing-min-32!!
         run: python -c "from app.main import app; print('Backend OK')"
+      - name: Apply database migrations
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://quantforge:quantforge_secret@localhost:5432/quantforge
+          SECRET_KEY: ci-secret-key-for-testing-min-32-chars!!
+          JWT_SECRET_KEY: ci-jwt-secret-key-for-testing-min-32!!
+        run: alembic upgrade head
       - name: API startup smoke tests
         working-directory: backend
         env:
