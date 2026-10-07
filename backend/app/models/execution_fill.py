@@ -32,4 +32,4 @@ class ExecutionFill(Base):
     executed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
-    order: Mapped["Order"] = relationship("Order")
+    order: Mapped["Order"] = relationship("Order", back_populates="fills")
