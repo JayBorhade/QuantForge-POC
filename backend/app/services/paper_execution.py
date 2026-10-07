@@ -10,6 +10,7 @@ from app.models.order import ExecutionMode, OrderSide
 from app.models.portfolio import Portfolio
 from app.services.execution import ExecutionService
 from app.services.fill_accounting import FillService
+from app.services.order_lifecycle import OrderStatusMapper
 
 
 class PaperExecutionService:
@@ -54,6 +55,9 @@ class PaperExecutionService:
             )
         )
         order.broker_order_id = broker_result.broker_order_id
+        order.status = OrderStatusMapper.from_broker_status(broker_result.status)
+        if order.status.name == "REJECTED":
+            raise ValueError("Paper broker rejected the order")
         await self.db.flush()
 
         fill = await FillService(self.db).apply_fill(
