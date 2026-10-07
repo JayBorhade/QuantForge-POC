@@ -22,8 +22,29 @@ class VWAPIntradayStrategy(BaseStrategy):
 
     def _calculate_vwap(self, df: pd.DataFrame) -> pd.Series:
         typical_price = (df["high"] + df["low"] + df["close"]) / 3
-        cumulative_tp_vol = (typical_price * df["volume"]).cumsum()
-        cumulative_vol = df["volume"].cumsum()
+        volume = df["volume"].fillna(0)
+
+        # VWAP must reset at the start of each trading session. Using one
+        # cumulative sum across the whole backtest would leak prior-session
+        # prices into today's VWAP and distort intraday signals.
+        timestamps = None
+        if isinstance(df.index, pd.DatetimeIndex):
+            timestamps = pd.Series(df.index, index=df.index)
+        else:
+            for column in ("datetime", "timestamp", "date", "Date"):
+                if column in df.columns:
+                    parsed = pd.to_datetime(df[column], errors="coerce")
+                    if parsed.notna().any():
+                        timestamps = parsed
+                        break
+
+        if timestamps is None:
+            session_key = pd.Series(np.arange(len(df)), index=df.index)
+        else:
+            session_key = timestamps.dt.normalize()
+
+        cumulative_tp_vol = (typical_price * volume).groupby(session_key).cumsum()
+        cumulative_vol = volume.groupby(session_key).cumsum()
         return cumulative_tp_vol / cumulative_vol.replace(0, np.nan)
 
     def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
