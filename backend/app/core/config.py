@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import List
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -64,6 +64,21 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = ""
     stripe_price_starter: str = ""
     stripe_price_pro: str = ""
+
+    @model_validator(mode="after")
+    def validate_production_security(self):
+        if self.app_env == "production":
+            if self.secret_key.startswith("dev-secret-key-"):
+                raise ValueError("SECRET_KEY must be explicitly configured in production")
+            if self.jwt_secret_key.startswith("dev-jwt-secret-key-"):
+                raise ValueError("JWT_SECRET_KEY must be explicitly configured in production")
+            if not self.cookie_secure:
+                raise ValueError("COOKIE_SECURE must be true in production")
+            if self.cookie_samesite not in {"lax", "strict", "none"}:
+                raise ValueError("COOKIE_SAMESITE must be lax, strict, or none")
+            if not self.cors_origins:
+                raise ValueError("CORS_ORIGINS must contain at least one trusted origin")
+        return self
 
     @property
     def effective_encryption_key(self) -> str:
