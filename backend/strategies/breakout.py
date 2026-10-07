@@ -35,6 +35,7 @@ class BreakoutStrategy(BaseStrategy):
             df["high"], df["low"], df["close"], window=atr_period
         ).average_true_range()
         df["signal"] = Signal.HOLD.value
+        df["stop_loss"] = pd.NA
 
         breakout_up = df["close"] > df["high_band"].shift(1)
         breakout_down = df["close"] < df["low_band"].shift(1)
@@ -42,13 +43,19 @@ class BreakoutStrategy(BaseStrategy):
         confirmed_up = breakout_up.rolling(confirm).sum() >= confirm
         confirmed_down = breakout_down.rolling(confirm).sum() >= confirm
 
-        df.loc[confirmed_up, "signal"] = Signal.BUY.value
-        df.loc[confirmed_up, "stop_loss"] = df.loc[confirmed_up, "close"] - (
-            df.loc[confirmed_up, "atr"] * atr_mult
-        )
-        df.loc[confirmed_down, "signal"] = Signal.SELL.value
-        df.loc[confirmed_down, "stop_loss"] = df.loc[confirmed_down, "close"] + (
-            df.loc[confirmed_down, "atr"] * atr_mult
-        )
+        # Emit one entry per breakout and one exit per position. Without this
+        # state tracking, a sustained breakout can generate repeated BUY
+        # signals on consecutive bars and overstate turnover in the backtest.
+        position = 0
+        for i in range(len(df)):
+            if bool(confirmed_up.iloc[i]) and position == 0:
+                df.loc[df.index[i], "signal"] = Signal.BUY.value
+                df.loc[df.index[i], "stop_loss"] = (
+                    df.iloc[i]["close"] - df.iloc[i]["atr"] * atr_mult
+                )
+                position = 1
+            elif bool(confirmed_down.iloc[i]) and position == 1:
+                df.loc[df.index[i], "signal"] = Signal.SELL.value
+                position = 0
 
         return df
