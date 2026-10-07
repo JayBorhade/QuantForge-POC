@@ -14,6 +14,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.portfolio import Portfolio
+    from app.models.execution_fill import ExecutionFill
 
 
 class OrderSide(str, enum.Enum):
@@ -70,4 +71,5 @@ class Order(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
-    portfolio: Mapped["Portfolio"] = relationship("Portfolio")
+    portfolio: Mapped["Portfolio"] = relationship("Portfolio", back_populates="orders")
+    fills: Mapped[list["ExecutionFill"]] = relationship("ExecutionFill", back_populates="order", cascade="all, delete-orphan")
