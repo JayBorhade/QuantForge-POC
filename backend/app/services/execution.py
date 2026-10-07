@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.order import ExecutionMode, Order, OrderSide, OrderStatus, OrderType
 from app.models.portfolio import Portfolio
+from app.services.risk import RiskService
 
 
 class BrokerExecutor(Protocol):
@@ -48,9 +49,19 @@ class ExecutionService:
         if duplicate:
             return duplicate
 
+        normalized_symbol = symbol.strip().upper()
+
+        await RiskService(self.db).require_approval(
+            portfolio=portfolio,
+            symbol=normalized_symbol,
+            side=side,
+            quantity=quantity,
+            estimated_price=limit_price,
+        )
+
         order = Order(
             portfolio_id=portfolio.id,
-            symbol=symbol.strip().upper(),
+            symbol=normalized_symbol,
             side=side,
             order_type=order_type,
             mode=mode,

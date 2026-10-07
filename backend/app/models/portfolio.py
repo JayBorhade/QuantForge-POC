@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from app.models.position import Position
     from app.models.trade import Trade
     from app.models.user import User
+    from app.models.risk_limit import RiskLimit
 
 
 class PortfolioStatus(str, enum.Enum):
@@ -61,6 +62,8 @@ class Portfolio(Base):
     user: Mapped["User"] = relationship("User", back_populates="portfolios")
     orders: Mapped[List["Order"]] = relationship("Order", back_populates="portfolio", cascade="all, delete-orphan")
     positions: Mapped[List["Position"]] = relationship("Position", back_populates="portfolio", cascade="all, delete-orphan")
+
+    risk_limit: Mapped["RiskLimit"] = relationship("RiskLimit", back_populates="portfolio", uselist=False, cascade="all, delete-orphan")
 
     trades: Mapped[List["Trade"]] = relationship(
         "Trade", back_populates="portfolio", cascade="all, delete-orphan"
