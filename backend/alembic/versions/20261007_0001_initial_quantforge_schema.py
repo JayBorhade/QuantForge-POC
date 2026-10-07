@@ -38,13 +38,6 @@ def upgrade() -> None:
     plantier = postgresql.ENUM("FREE", "STARTER", "PRO", "ENTERPRISE", name="plantier")
     subscriptionstatus = postgresql.ENUM("ACTIVE", "CANCELLED", "EXPIRED", "TRIAL", name="subscriptionstatus")
 
-    for enum_type in (
-        userrole, portfoliostatus, tradeside, tradestatus, trademode, strategytype,
-        strategystatus, runstatus, runmode, brokertype, notificationtype,
-        deploymentstatus, plantier, subscriptionstatus,
-    ):
-        enum_type.create(op.get_bind(), checkfirst=True)
-
     op.create_table(
         "users",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
