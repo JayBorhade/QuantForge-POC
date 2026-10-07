@@ -65,6 +65,33 @@ class OrderLifecycleTests(unittest.TestCase):
         self.assertEqual(order.status, OrderStatus.PARTIALLY_FILLED)
         db.flush.assert_awaited_once()
 
+    def test_reconcile_open_orders_processes_only_open_orders(self):
+        db = MagicMock()
+        db.flush = AsyncMock()
+        open_order = MagicMock(
+            id="open-1",
+            status=OrderStatus.SUBMITTED,
+            broker_order_id="paper-open",
+            filled_quantity=0,
+            quantity=2,
+        )
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = [open_order]
+        db.execute = AsyncMock(side_effect=[
+            result,
+            MagicMock(scalar_one_or_none=lambda: open_order),
+        ])
+        broker = MagicMock()
+        broker.get_order = AsyncMock(
+            return_value=BrokerOrderResult("paper-open", "submitted")
+        )
+
+        orders = asyncio.run(OrderLifecycleService(db, broker).reconcile_open_orders())
+
+        self.assertEqual(orders, [open_order])
+        self.assertEqual(open_order.status, OrderStatus.SUBMITTED)
+        broker.get_order.assert_awaited_once_with("paper-open")
+
     def test_reconcile_does_not_regress_filled_order(self):
         db = MagicMock()
         locked = MagicMock(status=OrderStatus.FILLED, broker_order_id="paper-1", filled_quantity=2, quantity=2)
