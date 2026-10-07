@@ -64,6 +64,7 @@ class BacktestEngine:
         entry_price = 0.0
         entry_cost = 0.0
         stop_loss = None
+        take_profit = None
         trades: List[Dict[str, Any]] = []
         equity_curve: List[Dict[str, Any]] = []
 
@@ -79,17 +80,20 @@ class BacktestEngine:
                 continue
 
             row_stop = row.get("stop_loss")
-            if row_stop is not None and not pd.isna(row_stop):
-                stop_loss = float(row_stop)
+            row_take_profit = row.get("take_profit")
 
             exit_price = None
             exit_reason = None
 
             if position > 0:
                 low = float(row["low"]) if not pd.isna(row.get("low")) else price
+                high = float(row["high"]) if not pd.isna(row.get("high")) else price
                 if stop_loss is not None and low <= stop_loss:
                     exit_price = stop_loss * (1.0 - slippage_pct)
                     exit_reason = "stop_loss"
+                elif take_profit is not None and high >= take_profit:
+                    exit_price = take_profit * (1.0 - slippage_pct)
+                    exit_reason = "take_profit"
                 elif signal == "sell":
                     exit_price = price * (1.0 - slippage_pct)
                     exit_reason = "signal"
@@ -111,6 +115,7 @@ class BacktestEngine:
                 entry_price = 0.0
                 entry_cost = 0.0
                 stop_loss = None
+                take_profit = None
 
             if signal == "buy" and position == 0:
                 fill_price = price * (1.0 + slippage_pct)
@@ -123,8 +128,10 @@ class BacktestEngine:
                     position = quantity
                     entry_price = fill_price
                     entry_cost = fee
-                    if stop_loss is None and row_stop is not None and not pd.isna(row_stop):
+                    if row_stop is not None and not pd.isna(row_stop):
                         stop_loss = float(row_stop)
+                    if row_take_profit is not None and not pd.isna(row_take_profit):
+                        take_profit = float(row_take_profit)
 
             portfolio_value = capital + position * price
             equity_curve.append({"index": i, "value": round(portfolio_value, 2)})
