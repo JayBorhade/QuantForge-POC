@@ -174,8 +174,17 @@ async def delete_strategy(strategy_id: uuid.UUID, current_user: CurrentUser, db:
 @router.post("/{strategy_id}/start")
 async def start_strategy(strategy_id: uuid.UUID, current_user: CurrentUser, db: DbSession):
     strategy = await _get_user_strategy(db, strategy_id, current_user.id)
+
+    # Live broker execution is not implemented yet. Do not expose a route that
+    # can report a strategy as live while the engine only evaluates signals.
+    if not strategy.is_paper:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Live execution is not enabled yet. Use paper mode until broker execution is implemented.",
+        )
+
     strategy.status = StrategyStatus.ACTIVE
-    mode = "paper" if strategy.is_paper else "live"
+    mode = "paper"
     try:
         from app.tasks.strategy_tasks import run_strategy_task
 
