@@ -4,7 +4,7 @@ import asyncio
 import unittest
 import uuid
 from decimal import Decimal
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 from app.models.execution_fill import ExecutionFill
 from app.models.order import ExecutionMode, Order, OrderSide, OrderStatus
@@ -46,8 +46,29 @@ class FillAccountingTests(unittest.TestCase):
         order = make_order()
         portfolio = Portfolio(id=order.portfolio_id, cash_balance=Decimal("5000"))
         position = Position(portfolio_id=order.portfolio_id, symbol="NIFTY", quantity=Decimal("0"), average_cost=Decimal("0"), realized_pnl=Decimal("0"))
-        db = AsyncMock()
-        db.execute = AsyncMock(side_effect=[Result(order), Result(portfolio), Result(None), Result(order), Result(portfolio), Result(position)])
+        db = MagicMock()
+        db.execute = AsyncMock()
+        db.flush = AsyncMock()
+        created_positions = []
+
+        def add(value):
+            if isinstance(value, Position):
+                created_positions.append(value)
+
+        db.add.side_effect = add
+        execute_results = [
+            Result(order), Result(portfolio), Result(None),
+            Result(order), Result(portfolio), None,
+        ]
+
+        async def execute(*args, **kwargs):
+            result = execute_results.pop(0)
+            if result is None:
+                return Result(created_positions[0])
+            return result
+
+        db.execute.side_effect = execute
+
         service = FillService(db)
         asyncio.run(service.apply_fill(order_id=order.id, quantity=Decimal("4"), price=Decimal("100")))
         asyncio.run(service.apply_fill(order_id=order.id, quantity=Decimal("6"), price=Decimal("110")))
