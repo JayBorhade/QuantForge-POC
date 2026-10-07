@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.models.strategy import RunMode, StrategyStatus, StrategyType
 
@@ -48,8 +48,16 @@ class BacktestRequest(BaseModel):
     strategy_id: UUID
     start_date: datetime
     end_date: datetime
-    initial_capital: float = Field(default=100000.0, gt=0)
+    initial_capital: float = Field(default=100000.0, gt=0, allow_inf_nan=False)
     mode: RunMode = RunMode.BACKTEST
+
+    @model_validator(mode="after")
+    def validate_period(self):
+        if self.start_date >= self.end_date:
+            raise ValueError("start_date must be earlier than end_date")
+        if self.mode != RunMode.BACKTEST:
+            raise ValueError("Only BACKTEST mode is supported by this endpoint")
+        return self
 
 
 class BacktestResponse(BaseModel):
