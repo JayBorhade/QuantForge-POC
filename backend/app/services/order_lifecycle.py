@@ -44,14 +44,20 @@ class OrderLifecycleService:
         self.broker = broker
 
     async def cancel(self, order: Order) -> Order:
-        if order.status in _TERMINAL_STATUSES:
-            raise ValueError(f"Cannot cancel terminal order: {order.status.value}")
-        if not order.broker_order_id:
+        result = await self.db.execute(
+            select(Order).where(Order.id == order.id).with_for_update()
+        )
+        locked = result.scalar_one_or_none()
+        if locked is None:
+            raise ValueError("Order not found")
+        if locked.status in _TERMINAL_STATUSES:
+            raise ValueError(f"Cannot cancel terminal order: {locked.status.value}")
+        if not locked.broker_order_id:
             raise ValueError("Cannot cancel an order without a broker order id")
-        await self.broker.cancel_order(order.broker_order_id)
-        order.status = OrderStatus.CANCELLED
+        await self.broker.cancel_order(locked.broker_order_id)
+        locked.status = OrderStatus.CANCELLED
         await self.db.flush()
-        return order
+        return locked
 
     async def reconcile_open_orders(self) -> list[Order]:
         result = await self.db.execute(
@@ -68,16 +74,24 @@ class OrderLifecycleService:
         return orders
 
     async def reconcile(self, order: Order) -> Order:
-        if not order.broker_order_id:
+        result = await self.db.execute(
+            select(Order).where(Order.id == order.id).with_for_update()
+        )
+        locked = result.scalar_one_or_none()
+        if locked is None:
+            raise ValueError("Order not found")
+        if not locked.broker_order_id:
             raise ValueError("Cannot reconcile an order without a broker order id")
-        result = await self.broker.get_order(order.broker_order_id)
-        new_status = OrderStatusMapper.from_broker_status(result.status)
-        if order.status is OrderStatus.FILLED and new_status is not OrderStatus.FILLED:
+        broker_result = await self.broker.get_order(locked.broker_order_id)
+        new_status = OrderStatusMapper.from_broker_status(broker_result.status)
+        if locked.status is OrderStatus.FILLED and new_status is not OrderStatus.FILLED:
             raise ValueError("Broker reconciliation attempted to regress a filled order")
-        if order.status is OrderStatus.CANCELLED and new_status is not OrderStatus.CANCELLED:
+        if locked.status is OrderStatus.CANCELLED and new_status is not OrderStatus.CANCELLED:
             raise ValueError("Broker reconciliation attempted to regress a cancelled order")
-        order.status = new_status
+        if new_status is OrderStatus.FILLED and locked.filled_quantity != locked.quantity:
+            raise ValueError("Broker reports filled order before local fill accounting is complete")
+        locked.status = new_status
         if new_status is OrderStatus.REJECTED:
-            order.rejection_reason = result.status[:512]
+            locked.rejection_reason = broker_result.status[:512]
         await self.db.flush()
-        return order
+        return locked
