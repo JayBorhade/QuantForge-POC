@@ -48,9 +48,17 @@ class ExecutionService:
         if duplicate:
             return duplicate
 
+        await RiskService(self.db).require_approval(
+            portfolio=portfolio,
+            symbol=normalized_symbol,
+            side=side,
+            quantity=quantity,
+            estimated_price=limit_price,
+        )
+
         order = Order(
             portfolio_id=portfolio.id,
-            symbol=symbol.strip().upper(),
+            symbol=normalized_symbol,
             side=side,
             order_type=order_type,
             mode=mode,
