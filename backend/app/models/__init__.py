@@ -24,3 +24,5 @@ __all__ = [
     "Subscription",
     "AuditLog",
 ]
+
+from app.models.order import Order
