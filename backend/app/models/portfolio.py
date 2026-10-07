@@ -14,6 +14,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.order import Order
+    from app.models.position import Position
     from app.models.trade import Trade
     from app.models.user import User
 
@@ -58,7 +59,8 @@ class Portfolio(Base):
     )
 
     user: Mapped["User"] = relationship("User", back_populates="portfolios")
-    orders: Mapped[List["Order"]] = relationship("Order", cascade="all, delete-orphan")
+    orders: Mapped[List["Order"]] = relationship("Order", back_populates="portfolio", cascade="all, delete-orphan")
+    positions: Mapped[List["Position"]] = relationship("Position", back_populates="portfolio", cascade="all, delete-orphan")
 
     trades: Mapped[List["Trade"]] = relationship(
         "Trade", back_populates="portfolio", cascade="all, delete-orphan"
