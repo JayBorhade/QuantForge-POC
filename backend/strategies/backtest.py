@@ -34,7 +34,8 @@ class BacktestEngine:
 
         strategy = get_strategy(strategy_type, symbol, parameters, mode="backtest")
         signals_df = strategy.generate_signals(df)
-        self._strategy_parameters = parameters\n        result = self._simulate_trades(signals_df, initial_capital)
+        self._strategy_parameters = parameters
+        result = self._simulate_trades(signals_df, initial_capital)
         return {
             "strategy_id": strategy_id,
             "symbol": symbol,
