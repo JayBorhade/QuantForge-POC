@@ -2,6 +2,7 @@
 
 from sqlalchemy import select
 from app.models.order import Order, OrderStatus
+from app.services.audit import log_audit
 
 
 _TERMINAL_STATUSES = {
@@ -56,6 +57,13 @@ class OrderLifecycleService:
             raise ValueError("Cannot cancel an order without a broker order id")
         await self.broker.cancel_order(locked.broker_order_id)
         locked.status = OrderStatus.CANCELLED
+        await log_audit(
+            self.db,
+            action="order.cancelled",
+            resource="order",
+            resource_id=str(locked.id),
+            details={"broker_order_id": locked.broker_order_id},
+        )
         await self.db.flush()
         return locked
 
@@ -93,5 +101,18 @@ class OrderLifecycleService:
         locked.status = new_status
         if new_status is OrderStatus.REJECTED:
             locked.rejection_reason = broker_result.status[:512]
+        if new_status is not locked.status:
+            await log_audit(
+                self.db,
+                action="order.reconciled",
+                resource="order",
+                resource_id=str(locked.id),
+                details={
+                    "previous_status": locked.status.value,
+                    "new_status": new_status.value,
+                    "broker_order_id": locked.broker_order_id,
+                },
+            )
+        locked.status = new_status
         await self.db.flush()
         return locked
