@@ -1,0 +1,65 @@
+name: QuantForge CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: quantforge
+          POSTGRES_PASSWORD: quantforge_secret
+          POSTGRES_DB: quantforge
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+      - name: Compile Python sources
+        working-directory: backend
+        run: python -m compileall -q app strategies tests
+      - name: Backtest unit tests
+        working-directory: backend
+        run: python -m unittest discover -s tests -v
+      - name: Import application
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://quantforge:quantforge_secret@localhost:5432/quantforge
+          SECRET_KEY: ci-secret-key-for-testing-min-32-chars!!
+          JWT_SECRET_KEY: ci-jwt-secret-key-for-testing-min-32!!
+        run: python -c "from app.main import app; print('Backend OK')"
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install and build
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+        run: |
+          npm install
+          npm run build
