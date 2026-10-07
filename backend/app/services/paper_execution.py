@@ -2,10 +2,12 @@
 
 from decimal import Decimal
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.brokers.base import BrokerOrderRequest
 from app.brokers.paper_adapter import PaperBrokerAdapter
+from app.models.execution_fill import ExecutionFill
 from app.models.order import ExecutionMode, OrderSide, OrderStatus
 from app.models.portfolio import Portfolio
 from app.services.execution import ExecutionService
@@ -44,6 +46,22 @@ class PaperExecutionService:
             client_order_id=client_order_id,
         )
 
+        paper_fill_id = f"paper-fill:{client_order_id}"
+        if order.status is OrderStatus.FILLED:
+            existing_result = await self.db.execute(
+                select(ExecutionFill).where(
+                    ExecutionFill.order_id == order.id,
+                    ExecutionFill.broker_fill_id == paper_fill_id,
+                )
+            )
+            existing_fill = existing_result.scalar_one_or_none()
+            if existing_fill is None:
+                raise ValueError("Filled paper order is missing its execution fill")
+            return order, existing_fill
+
+        if order.status in {OrderStatus.CANCELLED, OrderStatus.REJECTED, OrderStatus.FAILED}:
+            raise ValueError(f"Cannot replay terminal paper order: {order.status.value}")
+
         broker_result = await self.broker.submit_order(
             BrokerOrderRequest(
                 client_order_id=order.client_order_id,
@@ -65,6 +83,6 @@ class PaperExecutionService:
             quantity=quantity,
             price=fill_price,
             fee=fee,
-            broker_fill_id=f"paper-fill:{client_order_id}",
+            broker_fill_id=paper_fill_id,
         )
         return order, fill
