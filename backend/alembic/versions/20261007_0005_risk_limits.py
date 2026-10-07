@@ -21,7 +21,7 @@ def upgrade() -> None:
         sa.Column("max_position_quantity", sa.Numeric(18, 8), nullable=True),
         sa.Column("max_daily_loss", sa.Numeric(18, 8), nullable=True),
         sa.Column("max_open_orders", sa.Integer(), nullable=True),
-        sa.Column("kill_switch", sa.Boolean(), nullable=False, server_default=sa.false()),
+        sa.Column("kill_switch", sa.Boolean(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["portfolio_id"], ["portfolios.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
