@@ -85,7 +85,7 @@ jobs:
           expected = {
               "users", "user_sessions", "portfolios", "trades", "strategies",
               "strategy_runs", "broker_tokens", "notifications", "deployments",
-              "subscriptions", "audit_logs", "orders", "positions", "execution_fills",
+              "subscriptions", "audit_logs", "orders", "positions", "execution_fills", "cash_ledger_entries",
           }
 
           async def main():
