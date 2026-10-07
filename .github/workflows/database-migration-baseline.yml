@@ -67,6 +67,12 @@ jobs:
         working-directory: backend
         run: alembic check
 
+      - name: Verify downgrade and upgrade cycle
+        working-directory: backend
+        run: |
+          alembic downgrade 20261007_0001
+          alembic upgrade head
+
       - name: Verify expected tables exist
         working-directory: backend
         run: |
@@ -79,7 +85,7 @@ jobs:
           expected = {
               "users", "user_sessions", "portfolios", "trades", "strategies",
               "strategy_runs", "broker_tokens", "notifications", "deployments",
-              "subscriptions", "audit_logs",
+              "subscriptions", "audit_logs", "orders", "positions", "execution_fills",
           }
 
           async def main():
