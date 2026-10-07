@@ -35,7 +35,8 @@ class RSIMeanReversionStrategy(BaseStrategy):
         df = df.copy()
         df["rsi"] = ta.momentum.RSIIndicator(df["close"], window=period).rsi()
         df["signal"] = Signal.HOLD.value
-        df["last_signal_bar"] = 0
+        df["last_signal_bar"] = -1
+        df["stop_loss"] = pd.NA
 
         position = 0
         trailing_stop = None
@@ -52,14 +53,16 @@ class RSIMeanReversionStrategy(BaseStrategy):
                 df.iloc[i, df.columns.get_loc("signal")] = Signal.BUY.value
                 position = 1
                 trailing_stop = price * (1 - trail_pct)
+                df.loc[df.index[i], "stop_loss"] = trailing_stop
                 last_signal_idx = i
             elif position == 1:
                 trailing_stop = max(trailing_stop, price * (1 - trail_pct))
+                df.loc[df.index[i], "stop_loss"] = trailing_stop
                 if rsi > overbought or price < trailing_stop:
                     df.iloc[i, df.columns.get_loc("signal")] = Signal.SELL.value
                     position = 0
                     trailing_stop = None
                     last_signal_idx = i
 
-        df["trailing_stop"] = trailing_stop
+        df["trailing_stop"] = df["stop_loss"]
         return df
