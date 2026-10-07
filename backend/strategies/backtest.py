@@ -72,7 +72,9 @@ class BacktestEngine:
         stop_loss = None
         take_profit = None
         trades: List[Dict[str, Any]] = []
-        equity_curve: List[Dict[str, Any]] = []
+        # Include starting capital so drawdown is measured from the true
+        # portfolio baseline, including losses on the first bar.
+        equity_curve: List[Dict[str, Any]] = [{"index": -1, "value": round(capital, 2)}]
 
         position_size_pct = float(self._strategy_parameters.get("position_size_pct", 0.10))
         transaction_cost_pct = float(self._strategy_parameters.get("transaction_cost_pct", 0.001))
