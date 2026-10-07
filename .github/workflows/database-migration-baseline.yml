@@ -67,6 +67,12 @@ jobs:
         working-directory: backend
         run: alembic check
 
+      - name: Verify downgrade and upgrade cycle
+        working-directory: backend
+        run: |
+          alembic downgrade 20261007_0001
+          alembic upgrade head
+
       - name: Verify expected tables exist
         working-directory: backend
         run: |
