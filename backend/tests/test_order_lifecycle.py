@@ -51,11 +51,13 @@ class OrderLifecycleTests(unittest.TestCase):
     def test_reconcile_updates_status(self):
         db = MagicMock()
         db.flush = AsyncMock()
+        locked = MagicMock(status=OrderStatus.SUBMITTED, broker_order_id="paper-1", filled_quantity=0, quantity=2)
+        db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: locked))
         broker = MagicMock()
         broker.get_order = AsyncMock(
             return_value=BrokerOrderResult("paper-1", "partially_filled")
         )
-        order = MagicMock(status=OrderStatus.SUBMITTED, broker_order_id="paper-1")
+        order = MagicMock(id="order-1")
 
         result = asyncio.run(OrderLifecycleService(db, broker).reconcile(order))
 
@@ -65,9 +67,11 @@ class OrderLifecycleTests(unittest.TestCase):
 
     def test_reconcile_does_not_regress_filled_order(self):
         db = MagicMock()
+        locked = MagicMock(status=OrderStatus.FILLED, broker_order_id="paper-1", filled_quantity=2, quantity=2)
+        db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: locked))
         broker = MagicMock()
         broker.get_order = AsyncMock(return_value=BrokerOrderResult("paper-1", "cancelled"))
-        order = MagicMock(status=OrderStatus.FILLED, broker_order_id="paper-1")
+        order = MagicMock(id="order-1")
 
         with self.assertRaises(ValueError):
             asyncio.run(OrderLifecycleService(db, broker).reconcile(order))
