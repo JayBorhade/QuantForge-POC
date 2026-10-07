@@ -92,6 +92,34 @@ class OrderLifecycleTests(unittest.TestCase):
         self.assertEqual(open_order.status, OrderStatus.SUBMITTED)
         broker.get_order.assert_awaited_once_with("paper-open")
 
+    def test_reconcile_audits_status_change(self):
+        from unittest.mock import patch
+
+        db = MagicMock()
+        db.flush = AsyncMock()
+        locked = MagicMock(
+            id="order-1",
+            status=OrderStatus.SUBMITTED,
+            broker_order_id="paper-1",
+            filled_quantity=0,
+            quantity=2,
+        )
+        db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: locked))
+        broker = MagicMock()
+        broker.get_order = AsyncMock(
+            return_value=BrokerOrderResult("paper-1", "partially_filled")
+        )
+        order = MagicMock(id="order-1")
+
+        with patch("app.services.order_lifecycle.log_audit", new_callable=AsyncMock) as audit:
+            result = asyncio.run(OrderLifecycleService(db, broker).reconcile(order))
+
+        self.assertIs(result, locked)
+        audit.assert_awaited_once()
+        self.assertEqual(audit.await_args.kwargs["action"], "order.reconciled")
+        self.assertEqual(audit.await_args.kwargs["details"]["previous_status"], "submitted")
+        self.assertEqual(audit.await_args.kwargs["details"]["new_status"], "partially_filled")
+
     def test_reconcile_does_not_regress_filled_order(self):
         db = MagicMock()
         locked = MagicMock(status=OrderStatus.FILLED, broker_order_id="paper-1", filled_quantity=2, quantity=2)
