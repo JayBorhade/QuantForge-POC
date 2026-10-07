@@ -23,6 +23,11 @@ __all__ = [
     "Deployment",
     "Subscription",
     "AuditLog",
+    "Order",
+    "Position",
+    "ExecutionFill",
 ]
 
 from app.models.order import Order
+from app.models.position import Position
+from app.models.execution_fill import ExecutionFill
