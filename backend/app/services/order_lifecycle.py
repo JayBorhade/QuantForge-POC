@@ -1,5 +1,6 @@
 """Canonical order lifecycle and broker-status mapping."""
 
+from sqlalchemy import select
 from app.models.order import Order, OrderStatus
 
 
@@ -51,6 +52,20 @@ class OrderLifecycleService:
         order.status = OrderStatus.CANCELLED
         await self.db.flush()
         return order
+
+    async def reconcile_open_orders(self) -> list[Order]:
+        result = await self.db.execute(
+            select(Order).where(
+                Order.status.in_(
+                    (OrderStatus.PENDING, OrderStatus.SUBMITTED, OrderStatus.PARTIALLY_FILLED)
+                ),
+                Order.broker_order_id.is_not(None),
+            )
+        )
+        orders = list(result.scalars().all())
+        for order in orders:
+            await self.reconcile(order)
+        return orders
 
     async def reconcile(self, order: Order) -> Order:
         if not order.broker_order_id:
