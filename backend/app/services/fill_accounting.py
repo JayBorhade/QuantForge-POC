@@ -7,7 +7,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.cash_ledger import CashLedgerEntry, CashLedgerType
+from app.services.cash_ledger import CashLedgerService
 from app.models.execution_fill import ExecutionFill
 from app.models.order import ExecutionMode, Order, OrderSide, OrderStatus
 from app.models.portfolio import Portfolio
@@ -131,20 +131,13 @@ class FillService:
         self.db.add(fill)
 
         if order.mode is ExecutionMode.PAPER:
-            ledger_amount = (
-                -(notional + fee)
-                if order.side is OrderSide.BUY
-                else notional - fee
+            await CashLedgerService(self.db).record_trade_fill(
+                portfolio=portfolio,
+                order=order,
+                fill_id=fill.id,
+                notional=notional,
+                fee=fee,
             )
-            self.db.add(CashLedgerEntry(
-                portfolio_id=portfolio.id,
-                entry_type=CashLedgerType.TRADE,
-                amount=ledger_amount,
-                balance_after=portfolio.cash_balance,
-                idempotency_key=f"fill:{fill.id}",
-                order_id=order.id,
-                execution_fill_id=fill.id,
-            ))
 
         previous_filled = order.filled_quantity
         order.filled_quantity = previous_filled + quantity

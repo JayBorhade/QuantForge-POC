@@ -7,15 +7,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.order import ExecutionMode, Order, OrderSide, OrderStatus, OrderType
+from app.brokers.base import BrokerOrderRequest, BrokerAdapter
 from app.models.portfolio import Portfolio
-
-
-class BrokerExecutor(Protocol):
-    async def submit_order(self, order: Order) -> str: ...
+from app.services.risk import RiskService
+from app.services.order_lifecycle import OrderStatusMapper
+from app.services.audit import log_audit
 
 
 class ExecutionService:
-    def __init__(self, db: AsyncSession, broker: BrokerExecutor | None = None):
+    def __init__(self, db: AsyncSession, broker: BrokerAdapter | None = None):
         self.db = db
         self.broker = broker
 
@@ -48,9 +48,19 @@ class ExecutionService:
         if duplicate:
             return duplicate
 
+        normalized_symbol = symbol.strip().upper()
+
+        await RiskService(self.db).require_approval(
+            portfolio=portfolio,
+            symbol=normalized_symbol,
+            side=side,
+            quantity=quantity,
+            estimated_price=limit_price,
+        )
+
         order = Order(
             portfolio_id=portfolio.id,
-            symbol=symbol.strip().upper(),
+            symbol=normalized_symbol,
             side=side,
             order_type=order_type,
             mode=mode,
@@ -68,10 +78,41 @@ class ExecutionService:
 
         order.status = OrderStatus.SUBMITTED
         try:
-            order.broker_order_id = await self.broker.submit_order(order)
+            result = await self.broker.submit_order(
+                BrokerOrderRequest(
+                    client_order_id=order.client_order_id,
+                    symbol=order.symbol,
+                    side=order.side,
+                    order_type=order.order_type,
+                    quantity=order.quantity,
+                    limit_price=order.limit_price,
+                )
+            )
+            order.broker_order_id = result.broker_order_id
+            order.status = OrderStatusMapper.from_broker_status(result.status)
+            if order.status is OrderStatus.REJECTED:
+                order.rejection_reason = result.status[:512]
+            await log_audit(
+                self.db,
+                action="order.submitted",
+                resource="order",
+                resource_id=str(order.id),
+                details={
+                    "broker_order_id": order.broker_order_id,
+                    "status": order.status.value,
+                    "mode": order.mode.value,
+                },
+            )
         except Exception as exc:
             order.status = OrderStatus.FAILED
             order.rejection_reason = str(exc)[:512]
+            await log_audit(
+                self.db,
+                action="order.execution_failed",
+                resource="order",
+                resource_id=str(order.id),
+                details={"error": str(exc)[:512], "mode": order.mode.value},
+            )
             raise
 
         return order

@@ -18,6 +18,19 @@ class CashLedgerService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def assert_balance_consistent(self, portfolio: Portfolio) -> None:
+        result = await self.db.execute(
+            select(CashLedgerEntry)
+            .where(CashLedgerEntry.portfolio_id == portfolio.id)
+            .order_by(CashLedgerEntry.created_at.desc())
+            .limit(1)
+        )
+        latest = result.scalar_one_or_none()
+        if latest is None:
+            raise CashLedgerError("Portfolio has no cash ledger entries")
+        if latest.balance_after != portfolio.cash_balance:
+            raise CashLedgerError("Portfolio cash balance diverges from the cash ledger")
+
     async def record_trade_fill(
         self,
         *,

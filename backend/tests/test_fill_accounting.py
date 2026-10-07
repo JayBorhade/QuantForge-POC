@@ -11,6 +11,7 @@ from app.models.execution_fill import ExecutionFill
 from app.models.order import ExecutionMode, Order, OrderSide, OrderStatus
 from app.models.portfolio import Portfolio
 from app.models.position import Position
+from app.services.cash_ledger import CashLedgerError, CashLedgerService
 from app.services.fill_accounting import FillAccountingError, FillService
 
 
@@ -51,8 +52,8 @@ class FillAccountingTests(unittest.TestCase):
         db.execute = AsyncMock()
         db.flush = AsyncMock()
         db.execute.side_effect = [
-            Result(order), Result(portfolio), Result(position),
-            Result(order), Result(portfolio), Result(position),
+            Result(order), Result(portfolio), Result(position), Result(None),
+            Result(order), Result(portfolio), Result(position), Result(None),
         ]
 
         service = FillService(db)
@@ -67,6 +68,19 @@ class FillAccountingTests(unittest.TestCase):
         self.assertEqual(len(ledger_entries), 2)
         self.assertEqual([entry.amount for entry in ledger_entries], [Decimal("-400"), Decimal("-660")])
 
+    def test_cash_ledger_detects_balance_divergence(self):
+        portfolio = Portfolio(id=uuid.uuid4(), cash_balance=Decimal("100"))
+        latest = CashLedgerEntry(
+            portfolio_id=portfolio.id,
+            amount=Decimal("-10"),
+            balance_after=Decimal("90"),
+            idempotency_key="fill:test",
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=Result(latest))
+        with self.assertRaises(CashLedgerError):
+            asyncio.run(CashLedgerService(db).assert_balance_consistent(portfolio))
+
     def test_paper_buy_rejects_insufficient_cash(self):
         order = make_order(quantity="2")
         portfolio = Portfolio(id=order.portfolio_id, cash_balance=Decimal("100"))
@@ -80,7 +94,7 @@ class FillAccountingTests(unittest.TestCase):
         portfolio = Portfolio(id=order.portfolio_id, cash_balance=Decimal("100"))
         position = Position(portfolio_id=order.portfolio_id, symbol="NIFTY", quantity=Decimal("10"), average_cost=Decimal("100"), realized_pnl=Decimal("0"))
         db = MagicMock()
-        db.execute = AsyncMock(side_effect=[Result(order), Result(portfolio), Result(position)])
+        db.execute = AsyncMock(side_effect=[Result(order), Result(portfolio), Result(position), Result(None)])
         db.flush = AsyncMock()
         asyncio.run(FillService(db).apply_fill(order_id=order.id, quantity=Decimal("4"), price=Decimal("120"), fee=Decimal("2")))
         self.assertEqual(position.quantity, Decimal("6"))
