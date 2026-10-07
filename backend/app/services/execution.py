@@ -10,6 +10,7 @@ from app.models.order import ExecutionMode, Order, OrderSide, OrderStatus, Order
 from app.brokers.base import BrokerOrderRequest, BrokerAdapter
 from app.models.portfolio import Portfolio
 from app.services.risk import RiskService
+from app.services.order_lifecycle import OrderStatusMapper
 
 
 class ExecutionService:
@@ -87,6 +88,9 @@ class ExecutionService:
                 )
             )
             order.broker_order_id = result.broker_order_id
+            order.status = OrderStatusMapper.from_broker_status(result.status)
+            if order.status is OrderStatus.REJECTED:
+                order.rejection_reason = result.status[:512]
         except Exception as exc:
             order.status = OrderStatus.FAILED
             order.rejection_reason = str(exc)[:512]
