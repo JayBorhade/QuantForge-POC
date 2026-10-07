@@ -34,4 +34,4 @@ class Position(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
-    portfolio: Mapped["Portfolio"] = relationship("Portfolio")
+    portfolio: Mapped["Portfolio"] = relationship("Portfolio", back_populates="positions")
