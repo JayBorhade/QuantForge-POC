@@ -63,6 +63,10 @@ jobs:
       - name: Upgrade an empty PostgreSQL database
         working-directory: backend
         run: alembic upgrade head
+      - name: Verify migration matches SQLAlchemy metadata
+        working-directory: backend
+        run: alembic check
+
       - name: Verify expected tables exist
         working-directory: backend
         run: |
