@@ -25,7 +25,7 @@ class ReconciliationService:
             select(Order).where(
                 Order.status.in_((OrderStatus.SUBMITTED, OrderStatus.PARTIALLY_FILLED)),
                 Order.broker_order_id.is_not(None),
-                Order.created_at <= cutoff,
+                Order.updated_at <= cutoff,
             )
         )
         orders = list(result.scalars().all())
