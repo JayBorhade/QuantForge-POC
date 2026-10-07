@@ -1,10 +1,10 @@
 """Audit logging service."""
 
-logger = logging.getLogger(__name__)
-
-from typing import Any, Dict, Optional
 import logging
+from typing import Any, Dict, Optional
 from uuid import UUID
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
