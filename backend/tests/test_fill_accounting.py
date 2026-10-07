@@ -11,6 +11,7 @@ from app.models.execution_fill import ExecutionFill
 from app.models.order import ExecutionMode, Order, OrderSide, OrderStatus
 from app.models.portfolio import Portfolio
 from app.models.position import Position
+from app.services.cash_ledger import CashLedgerError, CashLedgerService
 from app.services.fill_accounting import FillAccountingError, FillService
 
 
@@ -66,6 +67,19 @@ class FillAccountingTests(unittest.TestCase):
         ledger_entries = [call.args[0] for call in db.add.call_args_list if isinstance(call.args[0], CashLedgerEntry)]
         self.assertEqual(len(ledger_entries), 2)
         self.assertEqual([entry.amount for entry in ledger_entries], [Decimal("-400"), Decimal("-660")])
+
+    def test_cash_ledger_detects_balance_divergence(self):
+        portfolio = Portfolio(id=uuid.uuid4(), cash_balance=Decimal("100"))
+        latest = CashLedgerEntry(
+            portfolio_id=portfolio.id,
+            amount=Decimal("-10"),
+            balance_after=Decimal("90"),
+            idempotency_key="fill:test",
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=Result(latest))
+        with self.assertRaises(CashLedgerError):
+            asyncio.run(CashLedgerService(db).assert_balance_consistent(portfolio))
 
     def test_paper_buy_rejects_insufficient_cash(self):
         order = make_order(quantity="2")
