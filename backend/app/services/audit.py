@@ -1,6 +1,9 @@
 """Audit logging service."""
 
+logger = logging.getLogger(__name__)
+
 from typing import Any, Dict, Optional
+import logging
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,3 +32,11 @@ async def log_audit(
     )
     db.add(entry)
     await db.flush()
+    logger.info(
+        "audit_event",
+        extra={
+            "audit_action": action,
+            "audit_resource": resource,
+            "audit_resource_id": resource_id,
+        },
+    )
