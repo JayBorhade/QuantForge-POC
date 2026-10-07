@@ -177,6 +177,10 @@ class BacktestEngine:
                 "reason": "end_of_period",
             })
             position = 0.0
+            # Include liquidation costs in the final equity point so reported
+            # drawdown and the chart end at the same value as final_capital.
+            if equity_curve:
+                equity_curve[-1]["value"] = round(capital, 2)
 
         final_value = capital
         total_return = (final_value - initial_capital) / initial_capital
