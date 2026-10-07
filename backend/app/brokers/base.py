@@ -1,6 +1,8 @@
 """Provider-neutral broker contract.
 
-Concrete broker integrations must implement this interface. The execution
+Concrete broker integrations must implement this interface. Broker adapters MUST treat
+`client_order_id` as an idempotency key so recovery can safely retry an uncertain
+submission without creating duplicate orders. The execution
 layer never imports provider SDKs directly, which keeps paper trading and
 live trading boundaries explicit and testable.
 """
