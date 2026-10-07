@@ -34,7 +34,7 @@ class BacktestEngine:
 
         strategy = get_strategy(strategy_type, symbol, parameters, mode="backtest")
         signals_df = strategy.generate_signals(df)
-        result = self._simulate_trades(signals_df, initial_capital)
+        self._strategy_parameters = parameters\n        result = self._simulate_trades(signals_df, initial_capital)
         return {
             "strategy_id": strategy_id,
             "symbol": symbol,
@@ -53,40 +53,104 @@ class BacktestEngine:
         return df.reset_index()
 
     def _simulate_trades(self, df: pd.DataFrame, initial_capital: float) -> Dict[str, Any]:
-        capital = initial_capital
-        position = 0
+        """Simulate long-only trades with sizing, costs, slippage and stop losses.
+
+        Signals are acted on at the current bar close. Stop losses, when supplied
+        by a strategy, are evaluated against the bar's low before a normal sell
+        signal. This keeps the engine deterministic and avoids inventing fills.
+        """
+        capital = float(initial_capital)
+        position = 0.0
         entry_price = 0.0
-        trades: List[Dict] = []
-        equity_curve: List[Dict] = []
+        entry_cost = 0.0
+        stop_loss = None
+        trades: List[Dict[str, Any]] = []
+        equity_curve: List[Dict[str, Any]] = []
+
+        position_size_pct = float(self._strategy_parameters.get("position_size_pct", 0.10))
+        position_size_pct = min(max(position_size_pct, 0.0), 1.0)
+        transaction_cost_pct = float(self._strategy_parameters.get("transaction_cost_pct", 0.001))
+        slippage_pct = float(self._strategy_parameters.get("slippage_pct", 0.0005))
 
         for i, row in df.iterrows():
-            price = row["close"]
+            price = float(row["close"])
             signal = row.get("signal", "hold")
+            if pd.isna(price) or price <= 0:
+                continue
+
+            row_stop = row.get("stop_loss")
+            if row_stop is not None and not pd.isna(row_stop):
+                stop_loss = float(row_stop)
+
+            exit_price = None
+            exit_reason = None
+
+            if position > 0:
+                low = float(row["low"]) if not pd.isna(row.get("low")) else price
+                if stop_loss is not None and low <= stop_loss:
+                    exit_price = stop_loss * (1.0 - slippage_pct)
+                    exit_reason = "stop_loss"
+                elif signal == "sell":
+                    exit_price = price * (1.0 - slippage_pct)
+                    exit_reason = "signal"
+
+            if position > 0 and exit_price is not None:
+                gross = position * exit_price
+                exit_fee = gross * transaction_cost_pct
+                capital += gross - exit_fee
+                pnl = (exit_price - entry_price) * position - entry_cost - exit_fee
+                trades.append({
+                    "entry": round(entry_price, 6),
+                    "exit": round(exit_price, 6),
+                    "quantity": round(position, 6),
+                    "pnl": round(pnl, 2),
+                    "return_pct": round((exit_price - entry_price) / entry_price * 100, 4),
+                    "reason": exit_reason,
+                })
+                position = 0.0
+                entry_price = 0.0
+                entry_cost = 0.0
+                stop_loss = None
 
             if signal == "buy" and position == 0:
-                position = capital * 0.1 / price
-                entry_price = price
-                capital -= position * price
-            elif signal == "sell" and position > 0:
-                pnl = (price - entry_price) * position
-                capital += position * price
-                trades.append({
-                    "entry": entry_price,
-                    "exit": price,
-                    "pnl": round(pnl, 2),
-                    "return_pct": round((price - entry_price) / entry_price * 100, 2),
-                })
-                position = 0
+                fill_price = price * (1.0 + slippage_pct)
+                allocation = capital * position_size_pct
+                quantity = allocation / (fill_price * (1.0 + transaction_cost_pct))
+                cost = quantity * fill_price
+                fee = cost * transaction_cost_pct
+                if quantity > 0 and cost + fee <= capital:
+                    capital -= cost + fee
+                    position = quantity
+                    entry_price = fill_price
+                    entry_cost = fee
+                    if stop_loss is None and row_stop is not None and not pd.isna(row_stop):
+                        stop_loss = float(row_stop)
 
             portfolio_value = capital + position * price
             equity_curve.append({"index": i, "value": round(portfolio_value, 2)})
 
-        final_value = capital + position * df.iloc[-1]["close"]
-        total_return = (final_value - initial_capital) / initial_capital
+        if position > 0 and len(df) > 0:
+            final_price = float(df.iloc[-1]["close"]) * (1.0 - slippage_pct)
+            gross = position * final_price
+            exit_fee = gross * transaction_cost_pct
+            capital += gross - exit_fee
+            pnl = (final_price - entry_price) * position - entry_cost - exit_fee
+            trades.append({
+                "entry": round(entry_price, 6),
+                "exit": round(final_price, 6),
+                "quantity": round(position, 6),
+                "pnl": round(pnl, 2),
+                "return_pct": round((final_price - entry_price) / entry_price * 100, 4),
+                "reason": "end_of_period",
+            })
+            position = 0.0
 
-        returns = pd.Series([t["return_pct"] / 100 for t in trades])
-        sharpe = self._sharpe_ratio(returns) if len(returns) > 1 else 0.0
-        max_dd = self._max_drawdown([e["value"] for e in equity_curve])
+        final_value = capital
+        total_return = (final_value - initial_capital) / initial_capital
+        equity_values = [e["value"] for e in equity_curve]
+        equity_returns = pd.Series(equity_values).pct_change().dropna()
+        sharpe = self._sharpe_ratio(equity_returns) if len(equity_returns) > 1 else 0.0
+        max_dd = self._max_drawdown(equity_values)
         wins = sum(1 for t in trades if t["pnl"] > 0)
         win_rate = wins / len(trades) if trades else 0.0
 
