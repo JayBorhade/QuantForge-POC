@@ -40,11 +40,15 @@ class ExecutionValidationTests(unittest.TestCase):
         db = AsyncMock()
         query_result = MagicMock()
         query_result.scalar_one_or_none.return_value = None
-        db.execute.return_value = query_result
+        owner_result = MagicMock()
+        owner_result.scalar_one_or_none.return_value = type(
+            "U", (), {"is_verified": True, "two_factor_enabled": True}
+        )()
+        db.execute.side_effect = [query_result, owner_result]
         broker = AsyncMock()
         broker.submit_order.side_effect = BrokerSubmissionUnknown("network timeout after send")
         service = ExecutionService(db, broker)
-        portfolio = type("P", (), {"id": "portfolio"})()
+        portfolio = type("P", (), {"id": "portfolio", "user_id": "user"})()
 
         with patch("app.services.execution.RiskService.require_approval", new=AsyncMock()):
             with self.assertRaises(BrokerSubmissionUnknown):
