@@ -11,6 +11,7 @@ class BacktestLifecycleHardeningTests(unittest.TestCase):
         runner = (ROOT / "app/services/backtest_runner.py").read_text(encoding="utf-8")
         self.assertIn("worker_token", model)
         self.assertIn("worker_started_at", model)
+        self.assertIn("identity_key", model)
         self.assertIn("lease_token", runner)
         self.assertIn("worker_token != lease_token", runner)
 
@@ -25,6 +26,7 @@ class BacktestLifecycleHardeningTests(unittest.TestCase):
         self.assertIn("uq_strategy_runs_backtest_identity", migration)
         self.assertIn("unique=True", migration)
         self.assertIn("configuration_fingerprint", migration)
+        self.assertIn("identity_key", migration)
 
     def test_api_handles_concurrent_duplicate_creation(self):
         source = (ROOT / "app/api/routes/strategies.py").read_text(encoding="utf-8")
