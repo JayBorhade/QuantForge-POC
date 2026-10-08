@@ -138,6 +138,8 @@ async def get_quote(
     current_user: CurrentUser,
     db: DbSession,
     broker: str = "binance",
+    exchange: str = "NSE",
+    symboltoken: Optional[str] = None,
 ):
     try:
         broker_type = BrokerType(broker)
@@ -166,10 +168,9 @@ async def get_quote(
         if broker_type is BrokerType.ZERODHA:
             return await adapter.get_quote(symbol, exchange="NSE")
         if broker_type is BrokerType.ANGEL_ONE:
-            raise HTTPException(
-                status_code=400,
-                detail="Angel One quotes require exchange and symboltoken",
-            )
+            if not symboltoken:
+                raise HTTPException(status_code=400, detail="Angel One quotes require symboltoken")
+            return await adapter.get_quote(symbol, exchange=exchange, symboltoken=symboltoken)
         return await adapter.get_quote(symbol)
     except HTTPException:
         raise
