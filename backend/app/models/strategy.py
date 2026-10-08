@@ -109,6 +109,8 @@ class StrategyRun(Base):
     configuration_fingerprint: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     data_source: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     data_revision: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    initial_capital: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 4), nullable=True)
+    input_snapshot: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
