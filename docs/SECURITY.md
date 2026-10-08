@@ -31,7 +31,7 @@
 - [x] Broker API secrets encrypted at rest (Fernet)
 - [x] Password reset token expiry
 - [ ] Database encryption at rest
-- [ ] Regular automated backups
+- [x] Automated PostgreSQL backup helper\n- [ ] Off-site backup retention and restore drill
 
 ## Deployment
 - [ ] Change all default secrets in `.env`
@@ -42,6 +42,6 @@
 - [ ] Configure fail2ban for SSH
 
 ## Monitoring
-- [ ] Centralized logging (ELK / Loki) — application emits request IDs and audit records; external aggregation remains deployment-specific
+- [x] Structured request logging with request IDs; external centralized aggregation remains deployment-specific
 - [ ] Alerting on failed logins — audit data is available; external alert routing remains deployment-specific
 - [ ] API usage monitoring for admin panel

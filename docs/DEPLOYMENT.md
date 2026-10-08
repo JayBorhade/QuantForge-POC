@@ -1,67 +1,95 @@
-# QuantForge Linux VPS Deployment Guide
+# QuantForge Production Deployment
 
-## Requirements
-- Ubuntu 22.04+ LTS
-- Docker & Docker Compose
-- 4GB+ RAM recommended
-- Domain with DNS A record
+## Architecture
 
-## 1. Server Setup
+Production runs PostgreSQL 16, Redis 7, FastAPI, a standalone Next.js frontend, a Celery worker, Celery Beat, and NGINX. Only NGINX is exposed publicly by the production Compose stack.
 
-```bash
-sudo apt update && sudo apt upgrade -y
-sudo apt install -y docker.io docker-compose-plugin git nginx certbot
-sudo usermod -aG docker $USER
-```
+## 1. Server prerequisites
 
-## 2. Clone & Configure
+- Ubuntu 22.04/24.04 LTS
+- 4+ GB RAM
+- Docker Engine + Compose plugin
+- DNS A/AAAA record for the production domain
+- Firewall allowing only SSH and HTTP/HTTPS
+
+## 2. Configure secrets
 
 ```bash
 git clone <your-repo> /opt/quantforge
 cd /opt/quantforge
 cp .env.example .env
-nano .env  # Set production secrets
+chmod 600 .env
 ```
 
-Required production values:
-- `APP_ENV=production`
-- `DEBUG=false`
-- `SECRET_KEY` — 64+ char random string
-- `JWT_SECRET_KEY` — 64+ char random string
-- `COOKIE_SECURE=true`
-- `FRONTEND_URL=https://yourdomain.com`
-- Strong `POSTGRES_PASSWORD`
+Set at minimum: `APP_ENV=production`, `DEBUG=false`, unique `SECRET_KEY`, `JWT_SECRET_KEY`, and `ENCRYPTION_KEY`, `COOKIE_SECURE=true`, `COOKIE_SAMESITE=lax`, production `FRONTEND_URL`/`BACKEND_URL`, a strong `POSTGRES_PASSWORD`, and trusted `CORS_ORIGINS`.
 
-## 3. SSL with Certbot
+Never commit `.env` or broker credentials.
+
+## 3. Start the production stack
 
 ```bash
-sudo certbot certonly --standalone -d yourdomain.com
+docker compose -f docker-compose.production.yml up -d --build
+docker compose -f docker-compose.production.yml ps
 ```
 
-Mount certs in NGINX config for HTTPS.
+The backend applies Alembic migrations before starting. Worker and Beat wait for backend readiness.
 
-## 4. Deploy
+## 4. Verify health
 
 ```bash
-docker compose -f docker-compose.yml up -d --build
-docker compose exec backend alembic upgrade head
+curl -f http://127.0.0.1/health
+curl -f http://127.0.0.1/health/ready
+docker compose -f docker-compose.production.yml logs --tail=100 backend
+docker compose -f docker-compose.production.yml logs --tail=100 celery-worker
 ```
 
-## 5. Verify
+Readiness checks PostgreSQL and Redis and returns HTTP 503 if either dependency is unavailable.
 
-- https://yourdomain.com — Frontend
-- https://yourdomain.com/api/docs — API documentation
-- `docker compose ps` — All services healthy
+## 5. HTTPS
 
-## 6. Maintenance
+The repository NGINX config is HTTP-only so TLS termination can be deployed with your preferred certificate manager or edge proxy. For a direct VPS deployment, terminate TLS at NGINX or an external load balancer and forward traffic to the Compose NGINX service. Do not expose ports 3000, 8000, 5432, or 6379 publicly.
+
+## 6. Backups
+
+Run `chmod +x scripts/backup-postgres.sh` followed by `./scripts/backup-postgres.sh ./backups`. Keep backups off-host as well as locally and test restoration regularly.
+
+Recommended policy: daily full PostgreSQL backup, encrypted off-site copy, appropriate retention, and periodic restore drills.
+
+## 7. Logs and incident debugging
+
+Every API request receives an `X-Request-ID`. Backend logs include request method, path, status, duration, and failures; audit records capture security-sensitive actions.
 
 ```bash
-# View logs
-docker compose logs -f backend
-
-# Restart services
-docker compose restart
-
-# Backup database
-docker compose exec postgres pg_dump -U quantforge quantforge > backup.sql
+docker compose -f docker-compose.production.yml logs -f backend
+docker compose -f docker-compose.production.yml logs -f celery-worker celery-beat
 ```
+
+Forward container stdout/stderr to centralized logging (Loki, ELK, CloudWatch, etc.) and alert on readiness failures, worker crashes, broker reconciliation failures, authentication failures, and database errors.
+
+## 8. Trading safety
+
+Live execution remains gated by verification, 2FA, and the risk engine. Deployment success is not proof that a broker account is ready for live trading.
+
+Before enabling live execution operationally: verify broker credentials and quote connectivity, reconciliation/fill handling, risk limits and kill switch, paper-trading soak tests, monitoring/rollback, and minimal initial notional.
+
+## 9. Upgrade / rollback
+
+```bash
+git fetch --all
+git checkout <release-tag>
+docker compose -f docker-compose.production.yml up -d --build
+```
+
+Take a database backup before destructive schema changes. Never manually edit production migration history.
+
+## 10. Security checklist
+
+- [ ] TLS certificate installed and auto-renewal tested
+- [ ] Firewall configured
+- [ ] SSH key-only access / fail2ban configured
+- [ ] Production secrets generated and stored securely
+- [ ] Database backups verified by restore
+- [ ] Centralized logs and alerts connected
+- [ ] Broker credentials validated
+- [ ] Paper-trading soak test completed
+- [ ] Live trading approval explicitly granted

@@ -2,6 +2,8 @@
 
 from contextlib import asynccontextmanager
 from uuid import uuid4
+import logging
+import time
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +20,7 @@ from app.core.csrf import CSRF_COOKIE, is_csrf_exempt, set_csrf_cookie, validate
 from app.db.session import engine
 
 settings = get_settings()
+logger = logging.getLogger("quantforge.request")
 limiter = Limiter(key_func=get_remote_address, default_limits=[f"{settings.rate_limit_per_minute}/minute"])
 
 
@@ -59,8 +62,22 @@ app.add_middleware(
 async def request_id_middleware(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID") or str(uuid4())
     request.state.request_id = request_id
-    response = await call_next(request)
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        duration_ms = (time.perf_counter() - started) * 1000
+        logger.exception(
+            "request_failed request_id=%s method=%s path=%s duration_ms=%.2f",
+            request_id, request.method, request.url.path, duration_ms,
+        )
+        raise
+    duration_ms = (time.perf_counter() - started) * 1000
     response.headers["X-Request-ID"] = request_id
+    logger.info(
+        "request_completed request_id=%s method=%s path=%s status=%s duration_ms=%.2f",
+        request_id, request.method, request.url.path, response.status_code, duration_ms,
+    )
     return response
 
 
