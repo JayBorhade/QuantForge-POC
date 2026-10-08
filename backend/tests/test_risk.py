@@ -23,6 +23,16 @@ class Result:
     def scalar_one(self):
         return self.value
 
+    def scalars(self):
+        class Scalars:
+            def __init__(self, value):
+                self.value = value
+
+            def all(self):
+                return self.value if isinstance(self.value, list) else [self.value]
+
+        return Scalars(self.value)
+
 
 def portfolio():
     return Portfolio(
