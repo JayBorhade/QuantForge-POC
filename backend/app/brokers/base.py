@@ -13,6 +13,10 @@ from typing import Mapping, Protocol
 from app.models.order import OrderSide, OrderType
 
 
+class BrokerSubmissionUnknown(Exception):
+    """The broker may have accepted the order, but the client cannot prove the outcome."""
+
+
 @dataclass(frozen=True)
 class BrokerOrderRequest:
     client_order_id: str
