@@ -31,9 +31,9 @@ class ExecutionIntegrationTests(unittest.TestCase):
         portfolio.user_id = uuid.uuid4()
         db = MagicMock()
         db.execute = AsyncMock(side_effect=[
-            Result(),
-            Result(),
             Result(type("User", (), {"is_verified": True, "two_factor_enabled": True})()),
+            Result(),
+            Result(),
         ])
         db.flush = AsyncMock()
         broker = PaperBrokerAdapter()
