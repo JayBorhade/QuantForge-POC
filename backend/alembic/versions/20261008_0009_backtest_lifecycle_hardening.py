@@ -13,7 +13,7 @@ def upgrade():
     op.add_column("strategy_runs", sa.Column("identity_key", sa.String(length=128), nullable=True))
     op.add_column("strategy_runs", sa.Column("worker_started_at", sa.DateTime(timezone=True), nullable=True))
     op.create_index("ix_strategy_runs_worker_token", "strategy_runs", ["worker_token"])
-    op.create_index("ix_strategy_runs_identity_key", "strategy_runs", ["identity_key"])
+    op.create_index("ix_strategy_runs_identity_key", "strategy_runs", ["identity_key"], unique=True)
     # Keep the newest replayable run when legacy rows contain duplicate identities.
     op.execute(sa.text("""
         UPDATE strategy_runs
@@ -36,17 +36,9 @@ def upgrade():
             WHERE duplicate_rank > 1
         )
     """))
-    op.create_index(
-        "uq_strategy_runs_backtest_identity",
-        "strategy_runs",
-        ["strategy_id", "mode", "identity_key"],
-        unique=True,
-        postgresql_where=sa.text("identity_key IS NOT NULL"),
-    )
 
 
 def downgrade():
-    op.drop_index("uq_strategy_runs_backtest_identity", table_name="strategy_runs")
     op.drop_index("ix_strategy_runs_identity_key", table_name="strategy_runs")
     op.drop_index("ix_strategy_runs_worker_token", table_name="strategy_runs")
     op.drop_column("strategy_runs", "identity_key")
