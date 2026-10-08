@@ -74,6 +74,7 @@ def run_backtest_for_strategy(
             start_date=start_date.isoformat(),
             end_date=end_date.isoformat(),
         )
+        run.identity_key = f"{strategy.id}:{RunMode.BACKTEST.value}:{run.configuration_fingerprint}"
         run.data_source = "yfinance"
         run.data_revision = "provider-runtime"
         db.flush()
@@ -97,6 +98,7 @@ def run_backtest_for_strategy(
 
             if "error" in result:
                 run.status = RunStatus.FAILED
+                run.identity_key = None
                 run.error_message = result["error"]
             else:
                 run.status = RunStatus.COMPLETED
@@ -122,4 +124,5 @@ def run_backtest_for_strategy(
             if run.worker_token == lease_token:
                 run.worker_token = None
                 run.worker_started_at = None
+                run.identity_key = None
             raise
