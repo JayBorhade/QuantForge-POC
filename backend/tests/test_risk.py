@@ -96,6 +96,90 @@ class RiskTests(unittest.TestCase):
                 portfolio=p, symbol="NIFTY", side=OrderSide.BUY, quantity=Decimal("1")
             ))
 
+    def test_gross_exposure_rejects_projected_buy(self):
+        p = portfolio()
+        p.total_value = Decimal("100000")
+        limits = RiskLimit(portfolio_id=p.id, max_gross_exposure=Decimal("10000"))
+        position = Position(
+            portfolio_id=p.id, symbol="NIFTY", quantity=Decimal("50"),
+            average_cost=Decimal("100"), realized_pnl=Decimal("0")
+        )
+        db = AsyncMock()
+        db.execute = AsyncMock(side_effect=[
+            Result(limits),
+            Result(position),
+            Result([]),
+        ])
+        decision = asyncio.run(RiskService(db).evaluate(
+            portfolio=p, symbol="NIFTY", side=OrderSide.BUY,
+            quantity=Decimal("60"), estimated_price=Decimal("100"),
+        ))
+        self.assertFalse(decision.approved)
+        self.assertIn("gross exposure", decision.reason)
+
+    def test_symbol_exposure_rejects_concentrated_order(self):
+        p = portfolio()
+        limits = RiskLimit(portfolio_id=p.id, max_symbol_exposure=Decimal("5000"))
+        position = Position(
+            portfolio_id=p.id, symbol="BTCUSDT", quantity=Decimal("30"),
+            average_cost=Decimal("100"), realized_pnl=Decimal("0")
+        )
+        db = AsyncMock()
+        db.execute = AsyncMock(side_effect=[
+            Result(limits),
+            Result(position),
+            Result([]),
+            Result([position]),
+        ])
+        decision = asyncio.run(RiskService(db).evaluate(
+            portfolio=p, symbol="BTCUSDT", side=OrderSide.BUY,
+            quantity=Decimal("25"), estimated_price=Decimal("100"),
+        ))
+        self.assertFalse(decision.approved)
+        self.assertIn("symbol exposure", decision.reason)
+
+    def test_strategy_allocation_rejects_strategy_order(self):
+        p = portfolio()
+        p.total_value = Decimal("10000")
+        limits = RiskLimit(
+            portfolio_id=p.id,
+            max_strategy_allocation_pct=Decimal("0.20"),
+        )
+        strategy_id = uuid.uuid4()
+        db = AsyncMock()
+        db.execute = AsyncMock(side_effect=[
+            Result(limits),
+            Result([]),
+            Result([]),
+        ])
+        decision = asyncio.run(RiskService(db).evaluate(
+            portfolio=p, symbol="NIFTY", side=OrderSide.BUY,
+            quantity=Decimal("30"), estimated_price=Decimal("100"),
+            strategy_id=strategy_id,
+        ))
+        self.assertFalse(decision.approved)
+        self.assertIn("strategy allocation", decision.reason)
+
+    def test_sell_reduces_exposure(self):
+        p = portfolio()
+        limits = RiskLimit(portfolio_id=p.id, max_gross_exposure=Decimal("5000"))
+        position = Position(
+            portfolio_id=p.id, symbol="NIFTY", quantity=Decimal("40"),
+            average_cost=Decimal("100"), realized_pnl=Decimal("0")
+        )
+        db = AsyncMock()
+        db.execute = AsyncMock(side_effect=[
+            Result(limits),
+            Result(position),
+            Result([]),
+            Result([position]),
+        ])
+        decision = asyncio.run(RiskService(db).evaluate(
+            portfolio=p, symbol="NIFTY", side=OrderSide.SELL,
+            quantity=Decimal("20"), estimated_price=Decimal("100"),
+        ))
+        self.assertTrue(decision.approved)
 
 if __name__ == "__main__":
+
     unittest.main()
