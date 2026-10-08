@@ -3,11 +3,12 @@
 from decimal import Decimal
 from typing import Mapping
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.order import ExecutionMode, Order, OrderSide, OrderStatus, OrderType
-from app.brokers.base import BrokerOrderRequest, BrokerAdapter
+from app.brokers.base import BrokerOrderRequest, BrokerAdapter, BrokerSubmissionUnknown
 from app.models.portfolio import Portfolio
 from app.services.risk import RiskService
 from app.services.order_lifecycle import OrderStatusMapper
@@ -50,7 +51,6 @@ class ExecutionService:
             return duplicate
 
         normalized_symbol = symbol.strip().upper()
-
         await RiskService(self.db).require_approval(
             portfolio=portfolio,
             symbol=normalized_symbol,
@@ -105,6 +105,18 @@ class ExecutionService:
                     "mode": order.mode.value,
                 },
             )
+        except (BrokerSubmissionUnknown, httpx.TransportError) as exc:
+            order.status = OrderStatus.SUBMISSION_UNKNOWN
+            order.rejection_reason = str(exc)[:512]
+            await log_audit(
+                self.db,
+                action="order.submission_unknown",
+                resource="order",
+                resource_id=str(order.id),
+                details={"error": str(exc)[:512], "mode": order.mode.value},
+            )
+            await self.db.flush()
+            raise
         except Exception as exc:
             order.status = OrderStatus.FAILED
             order.rejection_reason = str(exc)[:512]
