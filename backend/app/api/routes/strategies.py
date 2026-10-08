@@ -200,6 +200,16 @@ async def create_strategy(
     current_user: CurrentUser,
     db: DbSession,
 ):
+    if data.schedule_portfolio_id is not None:
+        portfolio = await db.get(Portfolio, data.schedule_portfolio_id)
+        if portfolio is None or portfolio.user_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schedule portfolio not found")
+        if portfolio.status is not PortfolioStatus.ACTIVE:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Scheduled strategy requires an active portfolio",
+            )
+
     strategy = Strategy(
         user_id=current_user.id,
         name=data.name,
@@ -209,6 +219,7 @@ async def create_strategy(
         parameters=data.parameters,
         is_paper=data.is_paper,
         schedule_cron=data.schedule_cron,
+        schedule_portfolio_id=data.schedule_portfolio_id,
     )
     db.add(strategy)
     await db.flush()
@@ -237,8 +248,42 @@ async def update_strategy(
 ):
     strategy = await _get_user_strategy(db, strategy_id, current_user.id)
     update_data = data.model_dump(exclude_unset=True)
+    next_schedule = update_data.get("schedule_cron", strategy.schedule_cron)
+    next_portfolio_id = update_data.get("schedule_portfolio_id", strategy.schedule_portfolio_id)
+    next_is_paper = update_data.get("is_paper", strategy.is_paper)
+
+    if next_schedule and next_portfolio_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="schedule_portfolio_id is required when schedule_cron is set",
+        )
+    if next_portfolio_id is not None and next_schedule is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="schedule_cron is required when schedule_portfolio_id is set",
+        )
+    if next_schedule and not next_is_paper:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Scheduled strategies must use paper mode",
+        )
+    if next_portfolio_id is not None:
+        portfolio = await db.get(Portfolio, next_portfolio_id)
+        if portfolio is None or portfolio.user_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schedule portfolio not found")
+        if portfolio.status is not PortfolioStatus.ACTIVE:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Scheduled strategy requires an active portfolio",
+            )
+
+    schedule_changed = (
+        "schedule_cron" in update_data or "schedule_portfolio_id" in update_data
+    )
     for key, value in update_data.items():
         setattr(strategy, key, value)
+    if schedule_changed:
+        strategy.last_scheduled_at = None
     await db.flush()
     await db.refresh(strategy)
     return strategy
