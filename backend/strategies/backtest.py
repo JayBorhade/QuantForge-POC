@@ -12,6 +12,7 @@ import yfinance as yf
 
 from app.backtesting.simulator import BacktestSimulator
 from app.backtesting.metrics import risk_analytics
+from app.backtesting.performance_report import build_performance_report
 from app.backtesting.types import BacktestBar, BacktestConfig
 from strategies.registry import get_strategy
 
@@ -61,6 +62,27 @@ class BacktestEngine:
             result.initial_capital,
             result.final_capital,
         )
+        benchmark_symbol = (parameters or {}).get("benchmark_symbol")
+        benchmark = None
+        if benchmark_symbol:
+            benchmark_frame = self._fetch_historical(str(benchmark_symbol), start_date, end_date)
+            if not benchmark_frame.empty:
+                benchmark = [
+                    {
+                        "timestamp": pd.Timestamp(row["date"] if "date" in row else row["Date"]).to_pydatetime().isoformat(),
+                        "value": float(row["close"]),
+                        "symbol": str(benchmark_symbol).upper(),
+                    }
+                    for _, row in benchmark_frame.iterrows()
+                ]
+        performance_report = build_performance_report(
+            initial_capital=result.initial_capital,
+            final_capital=result.final_capital,
+            equity=list(result.equity_curve),
+            trades=list(result.trades),
+            symbol=symbol,
+            benchmark=benchmark,
+        )
         return {
             "strategy_id": strategy_id, "symbol": symbol,
             "start_date": start_date.isoformat(), "end_date": end_date.isoformat(),
@@ -73,6 +95,7 @@ class BacktestEngine:
             "final_capital": round(float(result.final_capital), 4),
             "equity_curve": list(result.equity_curve)[-100:],
             "analytics": analytics,
+            "performance_report": performance_report,
             "trade_history": [
                 {
                     "entry": float(t.entry_price), "exit": float(t.exit_price),
