@@ -1,6 +1,7 @@
 """Deterministic paper execution orchestration."""
 
 from decimal import Decimal
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +36,7 @@ class PaperExecutionService:
         quantity: Decimal,
         client_order_id: str,
         fill_price: Decimal,
+        strategy_id: UUID | None = None,
         fee: Decimal = Decimal("0"),
     ):
         order = await ExecutionService(self.db).submit(
@@ -44,6 +46,8 @@ class PaperExecutionService:
             quantity=quantity,
             mode=ExecutionMode.PAPER,
             client_order_id=client_order_id,
+            strategy_id=strategy_id,
+            estimated_price=fill_price,
         )
 
         paper_fill_id = f"paper-fill:{client_order_id}"
