@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from uuid import UUID, uuid5, NAMESPACE_URL
+from uuid import NAMESPACE_URL, uuid5
 
 from app.models.order import OrderSide
 from app.models.portfolio import Portfolio
@@ -37,7 +37,8 @@ def build_execution_intent(
     """Convert one strategy signal into a deterministic paper-order intent.
 
     HOLD signals and SELL signals without an existing long position are no-ops.
-    Quantity is capped by the current long position for SELL signals.
+    BUY signals use the configured portfolio allocation; SELL closes the
+    current long position so a strategy reversal cannot leave a residual lot.
     """
     try:
         normalized_signal = Signal(signal)
@@ -67,9 +68,7 @@ def build_execution_intent(
         )
         if position is None or position.quantity <= 0:
             return None
-        quantity = min(position.quantity, (portfolio.cash_balance * risk_fraction) / market_price)
-        if quantity <= 0:
-            quantity = position.quantity
+        quantity = position.quantity
         side = OrderSide.SELL
 
     if quantity <= 0:
@@ -142,6 +141,7 @@ class StrategyExecutionService:
             quantity=intent.quantity,
             client_order_id=intent.client_order_id,
             fill_price=intent.price,
+            strategy_id=strategy.id,
         )
         return {
             "status": "executed",

@@ -2,6 +2,7 @@
 
 from decimal import Decimal
 from typing import Mapping
+from uuid import UUID
 
 import httpx
 from sqlalchemy import select
@@ -29,8 +30,10 @@ class ExecutionService:
         quantity: Decimal,
         mode: ExecutionMode,
         client_order_id: str,
+        strategy_id: UUID | None = None,
         order_type: OrderType = OrderType.MARKET,
         limit_price: Decimal | None = None,
+        estimated_price: Decimal | None = None,
         broker_params: Mapping[str, str] | None = None,
     ) -> Order:
         if quantity <= 0:
@@ -51,16 +54,18 @@ class ExecutionService:
             return duplicate
 
         normalized_symbol = symbol.strip().upper()
+        risk_price = estimated_price if estimated_price is not None else limit_price
         await RiskService(self.db).require_approval(
             portfolio=portfolio,
             symbol=normalized_symbol,
             side=side,
             quantity=quantity,
-            estimated_price=limit_price,
+            estimated_price=risk_price,
         )
 
         order = Order(
             portfolio_id=portfolio.id,
+            strategy_id=strategy_id,
             symbol=normalized_symbol,
             side=side,
             order_type=order_type,
