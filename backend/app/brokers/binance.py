@@ -87,7 +87,15 @@ class BinanceBrokerAdapter:
         data = response.json()
         if response.status_code >= 400 or "orderId" not in data:
             raise RuntimeError(data.get("msg") or f"Binance order failed ({response.status_code})")
-        return BrokerOrderResult(f"binance:{symbol}:{data['orderId']}", self._status(str(data.get("status", "NEW"))))
+        executed_qty = Decimal(str(data.get("executedQty", "0")))
+        cumulative_quote = Decimal(str(data.get("cummulativeQuoteQty", "0")))
+        average_price = (cumulative_quote / executed_qty) if executed_qty > 0 else None
+        return BrokerOrderResult(
+            f"binance:{symbol}:{data['orderId']}",
+            self._status(str(data.get("status", "NEW"))),
+            filled_quantity=executed_qty,
+            average_fill_price=average_price,
+        )
 
     async def find_order_by_client_order_id(self, client_order_id: str, symbol: str) -> BrokerOrderResult | None:
         normalized = symbol.replace("/", "").upper()
@@ -112,7 +120,15 @@ class BinanceBrokerAdapter:
         order_id = data.get("orderId")
         if order_id is None:
             return None
-        return BrokerOrderResult(f"binance:{normalized}:{order_id}", self._status(str(data.get("status", "NEW"))))
+        executed_qty = Decimal(str(data.get("executedQty", "0")))
+        cumulative_quote = Decimal(str(data.get("cummulativeQuoteQty", "0")))
+        average_price = (cumulative_quote / executed_qty) if executed_qty > 0 else None
+        return BrokerOrderResult(
+            f"binance:{normalized}:{order_id}",
+            self._status(str(data.get("status", "NEW"))),
+            filled_quantity=executed_qty,
+            average_fill_price=average_price,
+        )
 
     @staticmethod
     def _parse_order_id(broker_order_id: str) -> tuple[str, str]:
@@ -144,7 +160,15 @@ class BinanceBrokerAdapter:
             response = await client.get(f"{self.BASE_URL}/api/v3/order", headers=self._headers(), params=params)
             response.raise_for_status()
             data = response.json()
-            return BrokerOrderResult(broker_order_id=broker_order_id, status=self._status(str(data.get("status", ""))))
+            executed_qty = Decimal(str(data.get("executedQty", "0")))
+            cumulative_quote = Decimal(str(data.get("cummulativeQuoteQty", "0")))
+            average_price = (cumulative_quote / executed_qty) if executed_qty > 0 else None
+            return BrokerOrderResult(
+                broker_order_id=broker_order_id,
+                status=self._status(str(data.get("status", ""))),
+                filled_quantity=executed_qty,
+                average_fill_price=average_price,
+            )
 
     async def get_quote(self, symbol: str) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
