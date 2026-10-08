@@ -34,6 +34,8 @@ class BrokerOrderResult:
     status: str = "submitted"
     filled_quantity: Decimal = Decimal("0")
     average_fill_price: Decimal | None = None
+    cumulative_fee: Decimal | None = None
+    fee_currency: str | None = None
 
 
 class BrokerAdapter(Protocol):

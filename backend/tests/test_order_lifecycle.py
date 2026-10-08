@@ -147,6 +147,36 @@ class OrderLifecycleTests(unittest.TestCase):
         self.assertEqual(kwargs["price"], Decimal("110"))
         self.assertEqual(kwargs["broker_fill_id"], "broker:broker-1:filled:4")
 
+    def test_reconcile_applies_incremental_broker_fee(self):
+        db = MagicMock()
+        db.flush = AsyncMock()
+        locked = MagicMock(
+            id="order-1", portfolio_id="portfolio-1", status=OrderStatus.SUBMITTED,
+            broker_order_id="broker-1", filled_quantity=Decimal("0"), quantity=Decimal("2"),
+            average_fill_price=Decimal("0"),
+        )
+        db.execute = AsyncMock(side_effect=[
+            MagicMock(scalar_one_or_none=lambda: locked),
+            MagicMock(scalar_one_or_none=lambda: "USDT"),
+            MagicMock(scalar_one=lambda: Decimal("0")),
+        ])
+        broker = MagicMock()
+        broker.get_order = AsyncMock(return_value=BrokerOrderResult(
+            "broker-1", "filled",
+            filled_quantity=Decimal("2"),
+            average_fill_price=Decimal("100"),
+            cumulative_fee=Decimal("0.25"),
+            fee_currency="USDT",
+        ))
+        async def apply_fill(**kwargs):
+            locked.filled_quantity += kwargs["quantity"]
+            locked.average_fill_price = kwargs["price"]
+            return MagicMock()
+        with patch("app.services.order_lifecycle.FillService.apply_fill", new=AsyncMock(side_effect=apply_fill)) as apply:
+            result = asyncio.run(OrderLifecycleService(db, broker).reconcile(locked))
+        self.assertIs(result, locked)
+        self.assertEqual(apply.await_args.kwargs["fee"], Decimal("0.25"))
+
     def test_reconcile_does_not_regress_filled_order(self):
         db = MagicMock()
         locked = MagicMock(status=OrderStatus.FILLED, broker_order_id="paper-1", filled_quantity=2, quantity=2)

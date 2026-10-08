@@ -2,7 +2,9 @@
 
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from app.models.execution_fill import ExecutionFill
+from app.models.portfolio import Portfolio
 from app.models.order import Order, OrderStatus
 from app.services.audit import log_audit
 from app.services.fill_accounting import FillService, FillAccountingError
@@ -108,11 +110,32 @@ class OrderLifecycleService:
             if incremental_price <= 0:
                 raise ValueError("Broker reported a non-positive incremental fill price")
             fill_key = f"broker:{locked.broker_order_id}:filled:{broker_filled}"
+            fill_fee = Decimal("0")
+            if broker_result.cumulative_fee is not None:
+                if broker_result.cumulative_fee < 0:
+                    raise ValueError("Broker reported a negative cumulative fee")
+                if broker_result.fee_currency:
+                    portfolio_result = await self.db.execute(
+                        select(Portfolio.currency).where(Portfolio.id == locked.portfolio_id)
+                    )
+                    portfolio_currency = portfolio_result.scalar_one_or_none()
+                    if portfolio_currency and broker_result.fee_currency.upper() != portfolio_currency.upper():
+                        raise ValueError("Broker fee currency does not match portfolio currency")
+                fee_result = await self.db.execute(
+                    select(func.coalesce(func.sum(ExecutionFill.fee), 0)).where(
+                        ExecutionFill.order_id == locked.id
+                    )
+                )
+                recorded_fee = Decimal(str(fee_result.scalar_one() or "0"))
+                if broker_result.cumulative_fee < recorded_fee:
+                    raise ValueError("Broker reconciliation attempted to regress cumulative fees")
+                fill_fee = broker_result.cumulative_fee - recorded_fee
             try:
                 await FillService(self.db).apply_fill(
                     order_id=locked.id,
                     quantity=delta_quantity,
                     price=incremental_price,
+                    fee=fill_fee,
                     broker_fill_id=fill_key,
                 )
             except FillAccountingError as exc:
