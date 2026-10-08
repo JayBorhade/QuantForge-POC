@@ -73,17 +73,18 @@ class RiskService:
         if limits.max_open_orders is not None and open_count >= limits.max_open_orders:
             return RiskDecision(False, "Maximum open order limit reached")
 
+        exposure_limited = any(
+            value is not None
+            for value in (
+                limits.max_order_notional,
+                limits.max_gross_exposure,
+                limits.max_symbol_exposure,
+                limits.max_strategy_exposure,
+                limits.max_strategy_allocation_pct,
+            )
+        )
         if estimated_price is None or estimated_price <= 0:
-            if any(
-                value is not None
-                for value in (
-                    limits.max_order_notional,
-                    limits.max_gross_exposure,
-                    limits.max_symbol_exposure,
-                    limits.max_strategy_exposure,
-                    limits.max_strategy_allocation_pct,
-                )
-            ):
+            if exposure_limited:
                 return RiskDecision(False, "A positive estimated price is required for exposure risk checks")
             return RiskDecision(True)
 
@@ -113,17 +114,24 @@ class RiskService:
             )
         )
         open_orders = list(open_orders_result.scalars().all())
+        positions_result = await self.db.execute(
+            select(Position).where(Position.portfolio_id == portfolio.id)
+        )
+        positions = list(positions_result.scalars().all())
 
         current_gross = sum(
             abs((p.quantity or Decimal("0")) * (p.average_cost or Decimal("0")))
-            for p in (await self._positions()).values()
+            for p in positions
         )
         open_gross = sum(
             (o.quantity - o.filled_quantity).copy_abs()
             * (o.limit_price or o.average_fill_price or estimated_price)
             for o in open_orders
         )
-        projected_gross = current_gross + open_gross + order_notional
+        order_delta = order_notional if side is OrderSide.BUY else -min(
+            order_notional, abs(current_quantity * (position.average_cost if position else estimated_price))
+        )
+        projected_gross = max(current_gross + open_gross + order_delta, Decimal("0"))
         if limits.max_gross_exposure is not None and projected_gross > limits.max_gross_exposure:
             return RiskDecision(False, "Maximum gross exposure exceeded")
 
@@ -133,7 +141,10 @@ class RiskService:
             * (o.limit_price or o.average_fill_price or estimated_price)
             for o in open_orders if o.symbol == symbol
         )
-        projected_symbol = symbol_current + symbol_open + order_notional
+        projected_symbol = max(
+            symbol_current + symbol_open + order_delta,
+            Decimal("0"),
+        )
         if limits.max_symbol_exposure is not None and projected_symbol > limits.max_symbol_exposure:
             return RiskDecision(False, "Maximum symbol exposure exceeded")
 
@@ -145,7 +156,8 @@ class RiskService:
                 * (o.limit_price or o.average_fill_price or estimated_price)
                 for o in open_orders if o.strategy_id == strategy_id
             )
-            projected_strategy = strategy_open + order_notional
+            strategy_delta = order_notional if side is OrderSide.BUY else -order_notional
+            projected_strategy = max(strategy_open + strategy_delta, Decimal("0"))
             if limits.max_strategy_exposure is not None and projected_strategy > limits.max_strategy_exposure:
                 return RiskDecision(False, "Maximum strategy exposure exceeded")
             if limits.max_strategy_allocation_pct is not None:
@@ -158,18 +170,7 @@ class RiskService:
 
         return RiskDecision(True)
 
-    async def _positions(self) -> dict:
-        result = await self.db.execute(
-            select(Position).where(Position.portfolio_id == self._portfolio_id)
-        )
-        return {p.symbol: p for p in result.scalars().all()}
-
-    @property
-    def _portfolio_id(self):
-        return self._current_portfolio_id
-
     async def require_approval(self, **kwargs) -> None:
-        self._current_portfolio_id = kwargs["portfolio"].id
         decision = await self.evaluate(**kwargs)
         if not decision.approved:
             raise RiskRejected(decision.reason or "Order rejected by risk policy")
