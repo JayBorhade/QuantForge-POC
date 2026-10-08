@@ -1,39 +1,37 @@
-"""Zerodha Kite API adapter."""
+"""Compatibility facade for the canonical Zerodha adapter."""
 
-import logging
 from typing import Any, Dict, List
 
+from app.brokers.base import BrokerOrderRequest
+from app.brokers.zerodha import ZerodhaBrokerAdapter
+from app.models.order import OrderSide, OrderType
 from brokers.base import BaseBrokerAdapter, OrderRequest, OrderResponse
 
-logger = logging.getLogger(__name__)
 
-
-class ZerodhaAdapter(BaseBrokerAdapter):
-    """Zerodha Kite Connect integration."""
-
-    BASE_URL = "https://api.kite.trade"
-
-    async def connect(self) -> bool:
-        logger.info("Connecting to Zerodha Kite API")
-        return bool(self.access_token)
-
-    async def get_positions(self) -> List[Dict[str, Any]]:
-        # Production: kite.positions()
-        return []
+class ZerodhaAdapter(ZerodhaBrokerAdapter, BaseBrokerAdapter):
+    """Legacy API facade; execution is delegated to app.brokers.zerodha."""
 
     async def place_order(self, order: OrderRequest) -> OrderResponse:
-        logger.info("Zerodha order: %s %s %s", order.side, order.quantity, order.symbol)
-        return OrderResponse(
-            order_id=f"ZRD-{order.symbol}-{order.side}",
-            status="pending",
-            filled_quantity=0,
-            average_price=None,
-            raw={"broker": "zerodha", "symbol": order.symbol},
+        broker_params = getattr(order, "broker_params", {})
+        result = await self.submit_order(
+            BrokerOrderRequest(
+                client_order_id=f"legacy-{order.symbol}-{order.side}-{order.quantity}",
+                symbol=order.symbol,
+                side=OrderSide(order.side.lower()),
+                order_type=OrderType(order.order_type.lower()),
+                quantity=__import__("decimal").Decimal(str(order.quantity)),
+                limit_price=__import__("decimal").Decimal(str(order.price)) if order.price is not None else None,
+                broker_params=broker_params,
+            )
         )
+        return OrderResponse(result.broker_order_id, result.status, 0.0, None, {})
 
     async def cancel_order(self, order_id: str) -> bool:
-        logger.info("Cancelling Zerodha order %s", order_id)
+        await super().cancel_order(order_id)
         return True
 
     async def get_quote(self, symbol: str) -> Dict[str, Any]:
-        return {"symbol": symbol, "ltp": 0.0, "broker": "zerodha"}
+        return await super().get_quote(symbol)
+
+    async def get_positions(self) -> List[Dict[str, Any]]:
+        return await super().get_positions()

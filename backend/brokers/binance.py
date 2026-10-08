@@ -1,78 +1,37 @@
-"""Binance API adapter."""
+"""Compatibility facade for the canonical Binance adapter."""
 
-import hashlib
-import hmac
-import logging
-import time
 from typing import Any, Dict, List
-from urllib.parse import urlencode
 
-import httpx
-
+from app.brokers.base import BrokerOrderRequest
+from app.brokers.binance import BinanceBrokerAdapter
+from app.models.order import OrderSide, OrderType
 from brokers.base import BaseBrokerAdapter, OrderRequest, OrderResponse
 
-logger = logging.getLogger(__name__)
 
-
-class BinanceAdapter(BaseBrokerAdapter):
-    """Binance Spot API integration."""
-
-    BASE_URL = "https://api.binance.com"
-
-    def _sign(self, params: dict) -> str:
-        query = urlencode(params)
-        return hmac.new(
-            self.api_secret.encode(),
-            query.encode(),
-            hashlib.sha256,
-        ).hexdigest()
-
-    async def connect(self) -> bool:
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(f"{self.BASE_URL}/api/v3/ping")
-                return resp.status_code == 200
-        except Exception as e:
-            logger.error("Binance connection failed: %s", e)
-            return False
-
-    async def get_positions(self) -> List[Dict[str, Any]]:
-        return []
+class BinanceAdapter(BinanceBrokerAdapter, BaseBrokerAdapter):
+    """Legacy API facade; execution is delegated to app.brokers.binance."""
 
     async def place_order(self, order: OrderRequest) -> OrderResponse:
-        params = {
-            "symbol": order.symbol.replace("/", ""),
-            "side": order.side.upper(),
-            "type": order.order_type.upper(),
-            "quantity": order.quantity,
-            "timestamp": int(time.time() * 1000),
-        }
-        if order.price:
-            params["price"] = order.price
-            params["type"] = "LIMIT"
-            params["timeInForce"] = "GTC"
+        from decimal import Decimal
 
-        params["signature"] = self._sign(params)
-        logger.info("Binance order placed for %s", order.symbol)
-        return OrderResponse(
-            order_id=f"BNC-{params['symbol']}-{params['timestamp']}",
-            status="submitted",
-            filled_quantity=0,
-            average_price=order.price,
-            raw=params,
+        result = await self.submit_order(
+            BrokerOrderRequest(
+                client_order_id=f"legacy-{order.symbol}-{order.side}-{order.quantity}",
+                symbol=order.symbol,
+                side=OrderSide(order.side.lower()),
+                order_type=OrderType(order.order_type.lower()),
+                quantity=Decimal(str(order.quantity)),
+                limit_price=Decimal(str(order.price)) if order.price is not None else None,
+            )
         )
+        return OrderResponse(result.broker_order_id, result.status, 0.0, None, {})
 
     async def cancel_order(self, order_id: str) -> bool:
+        await super().cancel_order(order_id)
         return True
 
     async def get_quote(self, symbol: str) -> Dict[str, Any]:
-        sym = symbol.replace("/", "")
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                f"{self.BASE_URL}/api/v3/ticker/price",
-                params={"symbol": sym},
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                return {"symbol": symbol, "price": float(data["price"]), "broker": "binance"}
-        return {"symbol": symbol, "price": 0.0, "broker": "binance"}
+        return await super().get_quote(symbol)
+
+    async def get_positions(self) -> List[Dict[str, Any]]:
+        return await super().get_positions()

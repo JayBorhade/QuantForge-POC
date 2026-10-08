@@ -1,6 +1,8 @@
 """Execution service with paper/live safety boundaries."""
 
 from decimal import Decimal
+from typing import Mapping
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,6 +30,7 @@ class ExecutionService:
         client_order_id: str,
         order_type: OrderType = OrderType.MARKET,
         limit_price: Decimal | None = None,
+        broker_params: Mapping[str, str] | None = None,
     ) -> Order:
         if quantity <= 0:
             raise ValueError("Order quantity must be positive")
@@ -84,6 +87,7 @@ class ExecutionService:
                     order_type=order.order_type,
                     quantity=order.quantity,
                     limit_price=order.limit_price,
+                    broker_params=dict(broker_params or {}),
                 )
             )
             order.broker_order_id = result.broker_order_id

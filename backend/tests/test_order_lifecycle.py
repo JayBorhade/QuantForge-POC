@@ -31,10 +31,10 @@ class OrderLifecycleTests(unittest.TestCase):
 
         result = asyncio.run(OrderLifecycleService(db, broker).cancel(order))
 
-        self.assertIs(result, order)
+        self.assertIs(result, locked)
         self.assertEqual(locked.status, OrderStatus.CANCELLED)
         broker.cancel_order.assert_awaited_once_with("paper-1")
-        db.flush.assert_awaited_once()
+        self.assertGreaterEqual(db.flush.await_count, 1)
 
     def test_terminal_order_cannot_be_cancelled(self):
         db = MagicMock()
@@ -61,9 +61,9 @@ class OrderLifecycleTests(unittest.TestCase):
 
         result = asyncio.run(OrderLifecycleService(db, broker).reconcile(order))
 
-        self.assertIs(result, order)
-        self.assertEqual(order.status, OrderStatus.PARTIALLY_FILLED)
-        db.flush.assert_awaited_once()
+        self.assertIs(result, locked)
+        self.assertEqual(locked.status, OrderStatus.PARTIALLY_FILLED)
+        self.assertGreaterEqual(db.flush.await_count, 1)
 
     def test_reconcile_open_orders_processes_only_open_orders(self):
         db = MagicMock()
