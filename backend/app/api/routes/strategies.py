@@ -1,6 +1,7 @@
 """Strategy management routes."""
 
 import uuid
+from datetime import datetime, timezone
 from typing import List
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
@@ -18,6 +19,7 @@ from app.schemas.strategy import (
 )
 from app.services.audit import log_audit
 from app.services.backtest_runner import run_backtest_for_strategy
+from app.backtesting.fingerprint import configuration_fingerprint
 
 router = APIRouter(prefix="/strategies", tags=["Strategies"])
 
@@ -40,12 +42,57 @@ async def run_backtest(
     """Run backtest — creates StrategyRun, queues Celery or runs inline."""
     strategy = await _get_user_strategy(db, data.strategy_id, current_user.id)
 
+    fingerprint = configuration_fingerprint(
+        strategy_type=strategy.strategy_type.value,
+        symbol=strategy.symbol,
+        parameters=strategy.parameters or {},
+        config={"initial_capital": data.initial_capital},
+        start_date=data.start_date.isoformat(),
+        end_date=data.end_date.isoformat(),
+    )
+    existing = await db.execute(
+        select(StrategyRun)
+        .where(
+            StrategyRun.strategy_id == strategy.id,
+            StrategyRun.mode == RunMode.BACKTEST,
+            StrategyRun.configuration_fingerprint == fingerprint,
+            StrategyRun.status.in_([RunStatus.PENDING, RunStatus.RUNNING, RunStatus.COMPLETED]),
+        )
+        .order_by(StrategyRun.created_at.desc())
+        .limit(1)
+    )
+    existing_run = existing.scalar_one_or_none()
+    if existing_run:
+        return BacktestResponse(
+            run_id=existing_run.id,
+            status=existing_run.status.value,
+            sharpe_ratio=float(existing_run.sharpe_ratio) if existing_run.sharpe_ratio is not None else None,
+            max_drawdown=float(existing_run.max_drawdown) if existing_run.max_drawdown is not None else None,
+            total_return=float(existing_run.total_return) if existing_run.total_return is not None else None,
+            win_rate=float(existing_run.win_rate) if existing_run.win_rate is not None else None,
+            total_trades=existing_run.total_trades,
+            equity_curve=(existing_run.results or {}).get("equity_curve"),
+            trade_history=(existing_run.results or {}).get("trade_history"),
+        )
+
     run = StrategyRun(
         strategy_id=strategy.id,
         mode=RunMode.BACKTEST,
         status=RunStatus.PENDING,
         start_date=data.start_date,
         end_date=data.end_date,
+        initial_capital=data.initial_capital,
+        configuration_fingerprint=fingerprint,
+        data_source="yfinance",
+        data_revision="provider-runtime",
+        input_snapshot={
+            "strategy_type": strategy.strategy_type.value,
+            "symbol": strategy.symbol,
+            "parameters": strategy.parameters or {},
+            "initial_capital": str(data.initial_capital),
+            "start_date": data.start_date.isoformat(),
+            "end_date": data.end_date.isoformat(),
+        },
     )
     db.add(run)
     await db.flush()
