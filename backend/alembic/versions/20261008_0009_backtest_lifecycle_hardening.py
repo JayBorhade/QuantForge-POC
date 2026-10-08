@@ -33,7 +33,7 @@ def upgrade():
         "strategy_runs",
         ["strategy_id", "mode", "configuration_fingerprint"],
         unique=True,
-        postgresql_where=sa.text("configuration_fingerprint IS NOT NULL"),
+        postgresql_where=sa.text("configuration_fingerprint IS NOT NULL AND status NOT IN ('failed', 'cancelled')"),
     )
 
 
