@@ -8,9 +8,11 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
+from app.models.audit_log import AuditLog
 from app.models.portfolio import Portfolio
 from app.models.risk_limit import RiskLimit
 from app.services.audit import log_audit
+from app.services.risk_analytics import RiskAnalyticsService
 
 router = APIRouter(prefix="/risk", tags=["Risk"])
 
@@ -40,6 +42,34 @@ class RiskLimitUpdate(BaseModel):
 class RiskLimitResponse(RiskLimitUpdate):
     portfolio_id: uuid.UUID
     updated_at: str
+
+
+class RiskSummaryResponse(BaseModel):
+    portfolio_id: uuid.UUID
+    equity: Decimal
+    gross_exposure: Decimal
+    net_exposure: Decimal
+    open_order_notional: Decimal
+    position_count: int
+    open_order_count: int
+    daily_pnl: Decimal
+    kill_switch: bool
+    gross_utilization: Decimal | None
+    daily_loss_utilization: Decimal | None
+    open_order_utilization: Decimal | None
+    largest_symbol: str | None
+    largest_symbol_exposure: Decimal
+    largest_strategy_id: str | None
+    largest_strategy_exposure: Decimal
+
+
+class RiskEventResponse(BaseModel):
+    id: uuid.UUID
+    action: str
+    resource: str | None
+    resource_id: str | None
+    details: dict | None
+    created_at: str
 
 
 async def _get_portfolio(db, portfolio_id: uuid.UUID, user_id: uuid.UUID) -> Portfolio:
@@ -74,6 +104,48 @@ async def get_risk_limits(portfolio_id: uuid.UUID, current_user: CurrentUser, db
     result = await db.execute(select(RiskLimit).where(RiskLimit.portfolio_id == portfolio.id))
     limit = result.scalar_one_or_none()
     return _response(limit, portfolio.id) if limit else None
+
+
+@router.get("/{portfolio_id}/summary", response_model=RiskSummaryResponse)
+async def get_risk_summary(portfolio_id: uuid.UUID, current_user: CurrentUser, db: DbSession):
+    portfolio = await _get_portfolio(db, portfolio_id, current_user.id)
+    summary = await RiskAnalyticsService(db).summarize(portfolio)
+    return RiskSummaryResponse(
+        portfolio_id=portfolio.id,
+        **summary.__dict__,
+    )
+
+
+@router.get("/{portfolio_id}/events", response_model=list[RiskEventResponse])
+async def get_risk_events(
+    portfolio_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: DbSession,
+    limit: int = 50,
+):
+    portfolio = await _get_portfolio(db, portfolio_id, current_user.id)
+    limit = max(1, min(limit, 200))
+    result = await db.execute(
+        select(AuditLog)
+        .where(
+            AuditLog.resource == "portfolio",
+            AuditLog.resource_id == str(portfolio.id),
+            AuditLog.action.like("risk%"),
+        )
+        .order_by(AuditLog.created_at.desc())
+        .limit(limit)
+    )
+    return [
+        RiskEventResponse(
+            id=event.id,
+            action=event.action,
+            resource=event.resource,
+            resource_id=event.resource_id,
+            details=event.details,
+            created_at=event.created_at.isoformat(),
+        )
+        for event in result.scalars().all()
+    ]
 
 
 @router.put("/{portfolio_id}", response_model=RiskLimitResponse)
