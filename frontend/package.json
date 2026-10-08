@@ -33,6 +33,7 @@
     "zustand": "^5.0.2"
   },
   "devDependencies": {
+    "@next/eslint-plugin-next": "^15.1.3",
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
