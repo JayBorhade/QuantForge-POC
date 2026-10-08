@@ -117,8 +117,8 @@ class RiskTests(unittest.TestCase):
         db = AsyncMock()
         db.execute = AsyncMock(side_effect=[
             Result(limits),
-            Result(position),
             Result([]),
+            Result([position]),
         ])
         decision = asyncio.run(RiskService(db).evaluate(
             portfolio=p, symbol="NIFTY", side=OrderSide.BUY,
@@ -180,7 +180,6 @@ class RiskTests(unittest.TestCase):
         db = AsyncMock()
         db.execute = AsyncMock(side_effect=[
             Result(limits),
-            Result(position),
             Result([]),
             Result([position]),
         ])
