@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.order import ExecutionMode, Order, OrderSide, OrderStatus, OrderType
 from app.brokers.base import BrokerOrderRequest, BrokerAdapter, BrokerSubmissionUnknown
 from app.models.portfolio import Portfolio
+from app.models.user import User
 from app.services.risk import RiskRejected, RiskService
 from app.services.order_lifecycle import OrderStatusMapper
 from app.services.audit import log_audit
@@ -40,8 +41,15 @@ class ExecutionService:
             raise ValueError("Order quantity must be positive")
         if not symbol.strip():
             raise ValueError("Order symbol is required")
-        if mode is ExecutionMode.LIVE and self.broker is None:
-            raise ValueError("Live execution requires an approved broker executor")
+        if mode is ExecutionMode.LIVE:
+            if self.broker is None:
+                raise ValueError("Live execution requires an approved broker executor")
+            user_result = await self.db.execute(select(User).where(User.id == portfolio.user_id))
+            owner = user_result.scalar_one_or_none()
+            if owner is None or not owner.is_verified:
+                raise ValueError("Live execution requires a verified account")
+            if not owner.two_factor_enabled:
+                raise ValueError("Live execution requires two-factor authentication")
 
         existing = await self.db.execute(
             select(Order).where(
