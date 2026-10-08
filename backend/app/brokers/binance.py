@@ -154,31 +154,51 @@ class BinanceBrokerAdapter:
         symbol, order_id = self._parse_order_id(broker_order_id)
         return await self.get_order_for_symbol(symbol, order_id)
 
-    async def get_order_for_symbol(self, symbol: str, broker_order_id: str) -> BrokerOrderResult:
-        params = self._signed_params({"symbol": symbol.replace("/", "").upper(), "orderId": broker_order_id})
+    async def _get_cumulative_fee(self, symbol: str, order_id: str) -> tuple[Decimal | None, str | None]:
+        params = self._signed_params({"symbol": symbol, "orderId": order_id, "limit": 1000})
         async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
-            response = await client.get(f"{self.BASE_URL}/api/v3/order", headers=self._headers(), params=params)
-            response.raise_for_status()
-            data = response.json()
-            executed_qty = Decimal(str(data.get("executedQty", "0")))
-            cumulative_quote = Decimal(str(data.get("cummulativeQuoteQty", "0")))
-            average_price = (cumulative_quote / executed_qty) if executed_qty > 0 else None
-            return BrokerOrderResult(
-                broker_order_id=broker_order_id,
-                status=self._status(str(data.get("status", ""))),
-                filled_quantity=executed_qty,
-                average_fill_price=average_price,
+            response = await client.get(
+                f"{self.BASE_URL}/api/v3/myTrades",
+                headers=self._headers(),
+                params=params,
             )
+            response.raise_for_status()
+            trades = response.json()
+        if not trades:
+            return None, None
+        assets = {str(item.get("commissionAsset", "")) for item in trades}
+        assets.discard("")
+        if len(assets) != 1:
+            return None, None
+        total_fee = sum(
+            (Decimal(str(item.get("commission", "0"))) for item in trades),
+            Decimal("0"),
+        )
+        return total_fee, next(iter(assets))
 
-    async def get_quote(self, symbol: str) -> dict[str, Any]:
+    async def get_order_for_symbol(self, symbol: str, broker_order_id: str) -> BrokerOrderResult:
+        normalized = symbol.replace("/", "").upper()
+        params = self._signed_params({"symbol": normalized, "orderId": broker_order_id})
         async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
-            response = await client.get(f"{self.BASE_URL}/api/v3/ticker/price", params={"symbol": symbol.replace("/", "").upper()})
+            response = await client.get(
+                f"{self.BASE_URL}/api/v3/order",
+                headers=self._headers(),
+                params=params,
+            )
             response.raise_for_status()
             data = response.json()
-            return {"symbol": symbol, "price": Decimal(str(data["price"])), "broker": "binance"}
-
-    async def get_positions(self) -> list[dict[str, Any]]:
-        async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
-            response = await client.get(f"{self.BASE_URL}/api/v3/account", headers=self._headers(), params=self._signed_params({"recvWindow": 5000}))
-            response.raise_for_status()
-            return response.json().get("balances", [])
+        executed_qty = Decimal(str(data.get("executedQty", "0")))
+        cumulative_quote = Decimal(str(data.get("cummulativeQuoteQty", "0")))
+        average_price = (cumulative_quote / executed_qty) if executed_qty > 0 else None
+        cumulative_fee = None
+        fee_currency = None
+        if executed_qty > 0:
+            cumulative_fee, fee_currency = await self._get_cumulative_fee(normalized, broker_order_id)
+        return BrokerOrderResult(
+            broker_order_id=broker_order_id,
+            status=self._status(str(data.get("status", ""))),
+            filled_quantity=executed_qty,
+            average_fill_price=average_price,
+            cumulative_fee=cumulative_fee,
+            fee_currency=fee_currency,
+        )
