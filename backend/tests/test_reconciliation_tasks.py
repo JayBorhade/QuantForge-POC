@@ -49,7 +49,7 @@ class ReconciliationTaskTests(unittest.TestCase):
                  "app.tasks.reconciliation_tasks._reconcile_order",
                  new=AsyncMock(return_value={"order_id": str(order_id), "status": "unresolved"}),
              ):
-            result = asyncio.run(reconcile_broker_orders.run())
+            result = reconcile_broker_orders.run()
 
         self.assertEqual(result["unresolved"], 1)
         self.assertEqual(result["failed"], 0)
@@ -64,7 +64,7 @@ class ReconciliationTaskTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "skipped")
         self.assertEqual(result["reason"], "not_live")
-        db.commit.assert_not_awaited()
+        db.commit.assert_not_called()
 
 
 if __name__ == "__main__":
