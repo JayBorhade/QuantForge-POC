@@ -5,6 +5,9 @@ from decimal import Decimal
 from typing import Protocol
 
 from sqlalchemy import select
+
+from app.models.execution_fill import ExecutionFill
+from app.models.order import ExecutionMode, Order
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.portfolio import Portfolio
@@ -42,6 +45,34 @@ class PortfolioValuation:
     gross_exposure: Decimal
     risk_exposure: Decimal
     positions: tuple[PositionValuation, ...]
+
+
+class LatestExecutionQuoteProvider:
+    """Provide deterministic marks from the latest execution in a portfolio."""
+
+    def __init__(self, db: AsyncSession, portfolio_id, mode: ExecutionMode = ExecutionMode.PAPER):
+        self.db = db
+        self.portfolio_id = portfolio_id
+        self.mode = mode
+
+    async def get_quote(self, symbol: str, **kwargs) -> dict:
+        result = await self.db.execute(
+            select(ExecutionFill.price)
+            .join(Order, Order.id == ExecutionFill.order_id)
+            .where(
+                Order.portfolio_id == self.portfolio_id,
+                Order.mode == self.mode,
+                Order.symbol == symbol,
+            )
+            .order_by(ExecutionFill.executed_at.desc(), ExecutionFill.id.desc())
+            .limit(1)
+        )
+        price = result.scalar_one_or_none()
+        if price is None:
+            raise PortfolioValuationError(
+                f"No execution mark is available for {symbol} in this portfolio"
+            )
+        return {"price": price, "source": "latest_execution"}
 
 
 class PortfolioValuationService:
