@@ -25,6 +25,7 @@ def run_backtest_for_strategy(
             raise ValueError(f"Strategy {strategy_id} not found")
 
         run = None
+        lease_token = str(uuid.uuid4())
         if run_id:
             run = db.get(StrategyRun, uuid.UUID(run_id))
         if run_id:
@@ -53,7 +54,9 @@ def run_backtest_for_strategy(
             db.add(run)
 
         run.status = RunStatus.RUNNING
-        run.started_at = run.started_at or datetime.now(timezone.utc)
+        run.started_at = datetime.now(timezone.utc)
+        run.worker_token = lease_token
+        run.worker_started_at = run.started_at
         run.initial_capital = Decimal(str(initial_capital))
         run.input_snapshot = {
             "strategy_type": strategy.strategy_type.value,
@@ -88,6 +91,10 @@ def run_backtest_for_strategy(
                 parameters=snapshot.get("parameters", strategy.parameters or {}),
             )
 
+            db.refresh(run)
+            if run.status == RunStatus.CANCELLED or run.worker_token != lease_token:
+                return {"run_id": str(run.id), "status": run.status.value, "message": "Backtest worker lease no longer owns this run"}
+
             if "error" in result:
                 run.status = RunStatus.FAILED
                 run.error_message = result["error"]
@@ -100,6 +107,8 @@ def run_backtest_for_strategy(
                 run.total_trades = result.get("total_trades", 0)
                 run.results = result
                 run.completed_at = datetime.now(timezone.utc)
+            run.worker_token = None
+            run.worker_started_at = None
 
             return {
                 "run_id": str(run.id),
@@ -110,4 +119,7 @@ def run_backtest_for_strategy(
             run.status = RunStatus.FAILED
             run.error_message = str(e)
             run.completed_at = datetime.now(timezone.utc)
+            if run.worker_token == lease_token:
+                run.worker_token = None
+                run.worker_started_at = None
             raise
