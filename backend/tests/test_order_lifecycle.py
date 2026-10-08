@@ -2,7 +2,7 @@
 
 import asyncio
 import unittest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.brokers.base import BrokerOrderResult
 from app.models.order import OrderStatus
@@ -94,8 +94,6 @@ class OrderLifecycleTests(unittest.TestCase):
         broker.get_order.assert_awaited_once_with("paper-open")
 
     def test_reconcile_audits_status_change(self):
-        from unittest.mock import patch
-
         db = MagicMock()
         db.flush = AsyncMock()
         locked = MagicMock(
