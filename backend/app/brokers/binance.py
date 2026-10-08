@@ -87,7 +87,7 @@ class BinanceBrokerAdapter:
             data = response.json()
             if response.status_code >= 400 or "orderId" not in data:
                 raise RuntimeError(data.get("msg") or f"Binance order failed ({response.status_code})")
-            return BrokerOrderResult(f"binance:{symbol}:{data["orderId"]}", self._status(str(data.get("status", "NEW"))))
+            return BrokerOrderResult(f"binance:{symbol}:{data['orderId']}", self._status(str(data.get("status", "NEW"))))
 
     @staticmethod
     def _parse_order_id(broker_order_id: str) -> tuple[str, str]:
