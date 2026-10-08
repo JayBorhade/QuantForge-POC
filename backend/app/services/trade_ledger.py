@@ -140,8 +140,7 @@ class TradeLedgerService:
         if remaining > 0:
             # Preserve an auditable closed trade even when the position
             # predates the Trade ledger.
-            self.db.add(
-                Trade(
+            fallback_trade = Trade(
                     portfolio_id=order.portfolio_id,
                     strategy_id=order.strategy_id,
                     symbol=order.symbol,
@@ -156,10 +155,11 @@ class TradeLedgerService:
                     broker_order_id=order.broker_order_id,
                     closed_at=executed_at,
                 )
-            )
+            self.db.add(fallback_trade)
+            last_closed_trade = fallback_trade
 
         await self.db.flush()
-        return last_closed_trade or Trade(
+        return last_closed_trade
             portfolio_id=order.portfolio_id,
             strategy_id=order.strategy_id,
             symbol=order.symbol,
