@@ -44,7 +44,7 @@ class ExecutionValidationTests(unittest.TestCase):
         owner_result.scalar_one_or_none.return_value = type(
             "U", (), {"is_verified": True, "two_factor_enabled": True}
         )()
-        db.execute.side_effect = [query_result, MagicMock(), owner_result]
+        db.execute.side_effect = [owner_result, query_result, MagicMock()]
         broker = AsyncMock()
         broker.submit_order.side_effect = BrokerSubmissionUnknown("network timeout after send")
         service = ExecutionService(db, broker)
