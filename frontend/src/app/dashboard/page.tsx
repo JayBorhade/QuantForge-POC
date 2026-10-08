@@ -1,19 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
 import { Bot, DollarSign, Percent, TrendingUp, Zap } from "lucide-react";
-import {
-  Area,
-  AreaChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { motion } from "framer-motion";
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { DashboardHeader } from "@/components/dashboard/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { aiApi, dashboardApi } from "@/lib/api";
+import { dashboardApi, portfolioApi } from "@/lib/api";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 
 interface Overview {
@@ -27,30 +20,26 @@ interface Overview {
   ai_suggestions: { type: string; message: string; confidence: number }[];
 }
 
-const chartData = Array.from({ length: 14 }, (_, i) => ({
-  day: `D${i + 1}`,
-  pnl: 1200 + Math.sin(i * 0.5) * 3000 + i * 400,
-}));
+interface HistoryPoint {
+  timestamp: string;
+  equity: number;
+}
 
 export default function DashboardPage() {
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [history, setHistory] = useState<HistoryPoint[]>([]);
 
   useEffect(() => {
-    dashboardApi.overview().then((r) => setOverview(r.data)).catch(() => {
-      setOverview({
-        portfolio_value: 248750,
-        daily_pnl: 3240,
-        active_bots: 3,
-        open_trades: 7,
-        risk_exposure: 12.4,
-        win_rate: 68.2,
-        market_sentiment: "bullish",
-        ai_suggestions: [
-          { type: "risk", message: "Reduce exposure on high-beta positions.", confidence: 0.85 },
-          { type: "opportunity", message: "EMA crossover on AAPL — review strategy.", confidence: 0.72 },
-        ],
-      });
-    });
+    dashboardApi.overview().then((r) => setOverview(r.data)).catch(() => setOverview(null));
+    portfolioApi.list().then(async (r) => {
+      const first = r.data?.[0];
+      if (!first) return;
+      const historyResponse = await portfolioApi.history(first.id, 30);
+      setHistory(historyResponse.data?.map((point: HistoryPoint) => ({
+        timestamp: point.timestamp,
+        equity: Number(point.equity),
+      })) ?? []);
+    }).catch(() => setHistory([]));
   }, []);
 
   const stats = overview
@@ -62,16 +51,9 @@ export default function DashboardPage() {
       ]
     : [];
 
-  useEffect(() => {
-    aiApi.marketSummary().catch(() => {});
-  }, []);
-
   return (
     <div className="space-y-8">
-      <DashboardHeader
-        title="Dashboard Overview"
-        subtitle="Real-time portfolio and strategy performance"
-      />
+      <DashboardHeader title="Dashboard Overview" subtitle="Portfolio and strategy performance" />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat, i) => (
@@ -89,42 +71,40 @@ export default function DashboardPage() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2 p-6">
-          <CardHeader className="p-0 pb-4">
-            <CardTitle>PnL Trend</CardTitle>
-          </CardHeader>
+          <CardHeader className="p-0 pb-4"><CardTitle>Portfolio Equity</CardTitle></CardHeader>
           <CardContent className="p-0 h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="pnlGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="day" stroke="#64748b" fontSize={12} />
-                <YAxis stroke="#64748b" fontSize={12} />
-                <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #334155" }} />
-                <Area type="monotone" dataKey="pnl" stroke="#10b981" fill="url(#pnlGrad)" />
-              </AreaChart>
-            </ResponsiveContainer>
+            {history.length ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={history}>
+                  <XAxis dataKey="timestamp" hide />
+                  <YAxis hide />
+                  <Tooltip />
+                  <Area type="monotone" dataKey="equity" stroke="#10b981" fill="#10b98120" />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                No portfolio history recorded yet.
+              </div>
+            )}
           </CardContent>
         </Card>
 
         <Card className="p-6">
           <CardHeader className="p-0 pb-4 flex flex-row items-center gap-2">
             <Zap className="h-5 w-5 text-primary" />
-            <CardTitle>AI Suggestions</CardTitle>
+            <CardTitle>Insights</CardTitle>
           </CardHeader>
-          <CardContent className="p-0 space-y-4">
-            {overview?.ai_suggestions.map((s, i) => (
-              <div key={i} className="rounded-lg bg-secondary/50 p-3">
+          <CardContent className="p-0">
+            {overview?.ai_suggestions.length ? overview.ai_suggestions.map((s, i) => (
+              <div key={i} className="rounded-lg bg-secondary/50 p-3 mb-3">
                 <p className="text-xs uppercase text-primary">{s.type}</p>
                 <p className="mt-1 text-sm">{s.message}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Confidence: {(s.confidence * 100).toFixed(0)}%
-                </p>
+                <p className="mt-1 text-xs text-muted-foreground">Confidence: {(s.confidence * 100).toFixed(0)}%</p>
               </div>
-            ))}
+            )) : (
+              <p className="text-sm text-muted-foreground">No generated insights are available for the current portfolio state.</p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -132,15 +112,15 @@ export default function DashboardPage() {
       <div className="grid gap-4 sm:grid-cols-3">
         <Card className="p-4">
           <p className="text-sm text-muted-foreground">Risk Exposure</p>
-          <p className="text-xl font-bold">{overview?.risk_exposure.toFixed(1)}%</p>
+          <p className="text-xl font-bold">{overview ? `${overview.risk_exposure.toFixed(1)}%` : "—"}</p>
         </Card>
         <Card className="p-4">
           <p className="text-sm text-muted-foreground">Open Trades</p>
-          <p className="text-xl font-bold">{overview?.open_trades}</p>
+          <p className="text-xl font-bold">{overview?.open_trades ?? "—"}</p>
         </Card>
         <Card className="p-4">
           <p className="text-sm text-muted-foreground">Market Sentiment</p>
-          <p className="text-xl font-bold capitalize text-emerald-400">{overview?.market_sentiment}</p>
+          <p className="text-xl font-bold capitalize text-muted-foreground">{overview?.market_sentiment ?? "—"}</p>
         </Card>
       </div>
     </div>

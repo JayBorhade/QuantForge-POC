@@ -80,6 +80,21 @@ export const portfolioApi = {
   create: (data: { name: string; currency?: string; initial_capital?: number }) =>
     api.post("/portfolios", data),
   analytics: (id: string) => api.get(`/portfolios/${id}/analytics`),
+  valuation: (id: string, source = "paper") =>
+    api.get(`/portfolios/${id}/valuation`, { params: { source } }),
+  history: (id: string, days = 30) =>
+    api.get(`/portfolios/${id}/history`, { params: { days } }),
+  performance: (id: string, days = 30) =>
+    api.get(`/portfolios/${id}/performance`, { params: { days } }),
+};
+
+export const riskApi = {
+  limits: (portfolioId: string) => api.get(`/risk/${portfolioId}`),
+  summary: (portfolioId: string) => api.get(`/risk/${portfolioId}/summary`),
+  events: (portfolioId: string, limit = 50) =>
+    api.get(`/risk/${portfolioId}/events`, { params: { limit } }),
+  updateLimits: (portfolioId: string, data: Record<string, unknown>) =>
+    api.put(`/risk/${portfolioId}`, data),
 };
 
 export const brokerApi = {

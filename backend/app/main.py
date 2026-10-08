@@ -6,6 +6,8 @@ from uuid import uuid4
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from redis.asyncio import from_url as redis_from_url
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -92,6 +94,31 @@ async def security_headers(request: Request, call_next):
 @limiter.limit("30/minute")
 async def health(request: Request):
     return {"status": "healthy", "app": settings.app_name, "env": settings.app_env}
+
+
+@app.get("/health/ready")
+@limiter.limit("30/minute")
+async def readiness(request: Request):
+    checks = {"database": "ok", "redis": "ok"}
+    try:
+        async with engine.connect() as connection:
+            await connection.execute(text("SELECT 1"))
+    except Exception:
+        checks["database"] = "error"
+    redis = redis_from_url(settings.redis_url)
+    try:
+        await redis.ping()
+    except Exception:
+        checks["redis"] = "error"
+    finally:
+        await redis.aclose()
+    ready = all(value == "ok" for value in checks.values())
+    if not ready:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "app": settings.app_name, "checks": checks},
+        )
+    return {"status": "ready", "app": settings.app_name, "checks": checks}
 
 
 @app.get("/")

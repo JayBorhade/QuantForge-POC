@@ -38,6 +38,7 @@ const COLORS = ["#3b82f6", "#10b981"];
 export default function PortfolioPage() {
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [analytics, setAnalytics] = useState<PortfolioAnalytics | null>(null);
+  const [performance, setPerformance] = useState<Record<string, number> | null>(null);
 
   useEffect(() => {
     portfolioApi
@@ -45,7 +46,13 @@ export default function PortfolioPage() {
       .then((r) => {
         setPortfolios(r.data);
         if (r.data[0]) {
-          portfolioApi.analytics(r.data[0].id).then((a) => setAnalytics(a.data));
+          Promise.all([
+            portfolioApi.analytics(r.data[0].id),
+            portfolioApi.performance(r.data[0].id, 30),
+          ]).then(([a, perf]) => {
+            setAnalytics(a.data);
+            setPerformance(perf.data);
+          });
         }
       })
       .catch(() => setPortfolios([]));
@@ -101,6 +108,13 @@ export default function PortfolioPage() {
             </>
           ) : (
             <p className="text-sm text-muted-foreground">Sign up creates a Main Portfolio automatically.</p>
+          )}
+          {performance && (
+            <div className="rounded-lg bg-secondary/50 p-3 text-sm">
+              <p className="text-muted-foreground">30-day return</p>
+              <p className="font-semibold">{((performance.return ?? 0) * 100).toFixed(2)}%</p>
+              <p className="mt-1 text-muted-foreground">Max drawdown: {((performance.max_drawdown ?? 0) * 100).toFixed(2)}%</p>
+            </div>
           )}
           <Button
             variant="outline"

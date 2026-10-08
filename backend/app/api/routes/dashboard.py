@@ -53,19 +53,8 @@ async def get_overview(current_user: CurrentUser, db: DbSession) -> Dict[str, An
         "open_trades": open_trades,
         "risk_exposure": float(risk_exposure),
         "win_rate": avg_win_rate,
-        "market_sentiment": "bullish",
-        "ai_suggestions": [
-            {
-                "type": "risk",
-                "message": "Consider reducing position size on high-volatility symbols.",
-                "confidence": 0.82,
-            },
-            {
-                "type": "opportunity",
-                "message": "EMA crossover signal detected on AAPL — review strategy.",
-                "confidence": 0.71,
-            },
-        ],
+        "market_sentiment": "unavailable",
+        "ai_suggestions": [],
     }
 
 

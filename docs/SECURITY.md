@@ -7,7 +7,7 @@
 - [x] httpOnly secure cookies
 - [x] 2FA (TOTP) support
 - [x] Session/device tracking
-- [ ] Enforce email verification before live trading
+- [x] Enforce email verification before live trading
 
 ## API Security
 - [x] Rate limiting (SlowAPI)
@@ -42,6 +42,6 @@
 - [ ] Configure fail2ban for SSH
 
 ## Monitoring
-- [ ] Centralized logging (ELK / Loki)
-- [ ] Alerting on failed logins
+- [ ] Centralized logging (ELK / Loki) — application emits request IDs and audit records; external aggregation remains deployment-specific
+- [ ] Alerting on failed logins — audit data is available; external alert routing remains deployment-specific
 - [ ] API usage monitoring for admin panel
