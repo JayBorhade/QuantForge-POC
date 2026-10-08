@@ -30,6 +30,7 @@ class OrderType(str, enum.Enum):
 class OrderStatus(str, enum.Enum):
     PENDING = "pending"
     SUBMITTED = "submitted"
+    SUBMISSION_UNKNOWN = "submission_unknown"
     PARTIALLY_FILLED = "partially_filled"
     FILLED = "filled"
     CANCELLED = "cancelled"
@@ -69,7 +70,7 @@ class Order(Base):
     status: Mapped[OrderStatus] = mapped_column(Enum(OrderStatus), nullable=False, default=OrderStatus.PENDING)
     rejection_reason: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, onupdate=lambda: datetime.now(timezone.utc), default=lambda: datetime.now(timezone.utc))
 
     portfolio: Mapped["Portfolio"] = relationship("Portfolio", back_populates="orders")
     fills: Mapped[list["ExecutionFill"]] = relationship("ExecutionFill", back_populates="order", cascade="all, delete-orphan")
