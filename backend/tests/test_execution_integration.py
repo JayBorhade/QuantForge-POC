@@ -13,8 +13,11 @@ from app.services.execution import ExecutionService
 
 
 class Result:
+    def __init__(self, value=None):
+        self.value = value
+
     def scalar_one_or_none(self):
-        return None
+        return self.value
 
 
 class ExecutionIntegrationTests(unittest.TestCase):
@@ -25,8 +28,12 @@ class ExecutionIntegrationTests(unittest.TestCase):
             daily_pnl=Decimal("0"),
             status=PortfolioStatus.ACTIVE,
         )
+        portfolio.user_id = uuid.uuid4()
         db = MagicMock()
-        db.execute = AsyncMock(return_value=Result())
+        db.execute = AsyncMock(side_effect=[
+            Result(),
+            Result(type("User", (), {"is_verified": True, "two_factor_enabled": True})()),
+        ])
         db.flush = AsyncMock()
         broker = PaperBrokerAdapter()
 
