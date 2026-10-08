@@ -107,6 +107,7 @@ class StrategyRun(Base):
     results: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     configuration_fingerprint: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    identity_key: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
     data_source: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     data_revision: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     initial_capital: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 4), nullable=True)
