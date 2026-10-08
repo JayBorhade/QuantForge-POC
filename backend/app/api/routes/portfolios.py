@@ -9,9 +9,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
+from app.brokers.factory import get_broker_adapter
+from app.core.encryption import decrypt_credentials
+from app.models.broker_token import BrokerToken, BrokerType
 from app.models.portfolio import Portfolio, PortfolioStatus
 from app.models.trade import Trade
 from app.services.audit import log_audit
+from app.services.portfolio_valuation import PortfolioValuationError, PortfolioValuationService
 
 router = APIRouter(prefix="/portfolios", tags=["Portfolios"])
 
@@ -82,6 +86,79 @@ async def create_portfolio(data: PortfolioCreate, current_user: CurrentUser, db:
 async def get_portfolio(portfolio_id: uuid.UUID, current_user: CurrentUser, db: DbSession):
     portfolio = await _get_portfolio(db, portfolio_id, current_user.id)
     return _to_response(portfolio)
+
+
+@router.get("/{portfolio_id}/valuation")
+async def portfolio_valuation(
+    portfolio_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: DbSession,
+    broker: str = "binance",
+):
+    """Mark all open positions to current broker prices and persist portfolio equity."""
+    portfolio = await _get_portfolio(db, portfolio_id, current_user.id)
+    try:
+        broker_type = BrokerType(broker)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Unsupported broker") from exc
+
+    token_result = await db.execute(
+        select(BrokerToken).where(
+            BrokerToken.user_id == current_user.id,
+            BrokerToken.broker == broker_type,
+            BrokerToken.is_active.is_(True),
+        )
+    )
+    token = token_result.scalar_one_or_none()
+    if token is None:
+        raise HTTPException(status_code=404, detail="Connected broker not found")
+
+    try:
+        credentials = decrypt_credentials(token.api_secret_encrypted)
+        adapter = get_broker_adapter(
+            broker_type.value,
+            credentials["api_key"],
+            credentials["api_secret"],
+            credentials.get("access_token"),
+        )
+
+        if broker_type is not BrokerType.BINANCE:
+            raise HTTPException(
+                status_code=400,
+                detail="Portfolio valuation currently requires a broker with symbol-only quote support; Binance is supported in this endpoint.",
+            )
+
+        valuation = await PortfolioValuationService(db, adapter).value_portfolio(portfolio)
+    except HTTPException:
+        raise
+    except PortfolioValuationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Broker valuation request failed: {exc}") from exc
+
+    return {
+        "portfolio_id": valuation.portfolio_id,
+        "cash_balance": float(valuation.cash_balance),
+        "position_market_value": float(valuation.position_market_value),
+        "equity": float(valuation.equity),
+        "realized_pnl": float(valuation.realized_pnl),
+        "unrealized_pnl": float(valuation.unrealized_pnl),
+        "total_pnl": float(valuation.total_pnl),
+        "gross_exposure": float(valuation.gross_exposure),
+        "risk_exposure": float(valuation.risk_exposure),
+        "positions": [
+            {
+                "symbol": item.symbol,
+                "quantity": float(item.quantity),
+                "average_cost": float(item.average_cost),
+                "market_price": float(item.market_price),
+                "market_value": float(item.market_value),
+                "unrealized_pnl": float(item.unrealized_pnl),
+                "realized_pnl": float(item.realized_pnl),
+            }
+            for item in valuation.positions
+        ],
+    }
 
 
 @router.get("/{portfolio_id}/analytics")
