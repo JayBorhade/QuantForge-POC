@@ -5,7 +5,11 @@ import unittest
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
-from app.services.portfolio_valuation import PortfolioValuationError, PortfolioValuationService
+from app.services.portfolio_valuation import (
+    LatestExecutionQuoteProvider,
+    PortfolioValuationError,
+    PortfolioValuationService,
+)
 
 
 class PortfolioValuationTests(unittest.TestCase):
@@ -50,6 +54,28 @@ class PortfolioValuationTests(unittest.TestCase):
         with self.assertRaises(PortfolioValuationError):
             asyncio.run(service.value_portfolio(portfolio))
         db.flush.assert_not_awaited()
+
+    def test_latest_execution_quote_provider_returns_latest_paper_mark(self):
+        db = AsyncMock()
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = Decimal("125.50")
+        db.execute.return_value = result
+        provider = LatestExecutionQuoteProvider(db, "portfolio")
+
+        quote = asyncio.run(provider.get_quote("ABC"))
+
+        self.assertEqual(quote, {"price": Decimal("125.50"), "source": "latest_execution"})
+        db.execute.assert_awaited_once()
+
+    def test_latest_execution_quote_provider_rejects_missing_mark(self):
+        db = AsyncMock()
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = None
+        db.execute.return_value = result
+        provider = LatestExecutionQuoteProvider(db, "portfolio")
+
+        with self.assertRaises(PortfolioValuationError):
+            asyncio.run(provider.get_quote("ABC"))
 
     def test_can_value_without_persisting(self):
         position = MagicMock(
