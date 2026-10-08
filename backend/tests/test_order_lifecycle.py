@@ -31,7 +31,7 @@ class OrderLifecycleTests(unittest.TestCase):
 
         result = asyncio.run(OrderLifecycleService(db, broker).cancel(order))
 
-        self.assertIs(result, order)
+        self.assertIs(result, locked)
         self.assertEqual(locked.status, OrderStatus.CANCELLED)
         broker.cancel_order.assert_awaited_once_with("paper-1")
         db.flush.assert_awaited_once()
@@ -61,8 +61,8 @@ class OrderLifecycleTests(unittest.TestCase):
 
         result = asyncio.run(OrderLifecycleService(db, broker).reconcile(order))
 
-        self.assertIs(result, order)
-        self.assertEqual(order.status, OrderStatus.PARTIALLY_FILLED)
+        self.assertIs(result, locked)
+        self.assertEqual(locked.status, OrderStatus.PARTIALLY_FILLED)
         db.flush.assert_awaited_once()
 
     def test_reconcile_open_orders_processes_only_open_orders(self):
