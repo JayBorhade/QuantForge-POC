@@ -7,7 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
-from app.models.strategy import RunMode, RunStatus, Strategy, StrategyRun, StrategyStatus
+from app.models.portfolio import Portfolio, PortfolioStatus\nfrom app.models.strategy import RunMode, RunStatus, Strategy, StrategyRun, StrategyStatus
 from app.schemas.strategy import (
     BacktestRequest,
     BacktestResponse,
@@ -200,6 +200,59 @@ async def start_strategy(strategy_id: uuid.UUID, current_user: CurrentUser, db: 
             mode,
         )
     return {"message": "Strategy started", "strategy_id": str(strategy.id)}
+
+
+@router.post("/{strategy_id}/execute")
+async def execute_strategy_signal(
+    strategy_id: uuid.UUID,
+    portfolio_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: DbSession,
+):
+    """Queue one deterministic paper execution from the latest strategy signal."""
+    strategy = await _get_user_strategy(db, strategy_id, current_user.id)
+
+    if not strategy.is_paper:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Live strategy execution is not enabled yet; use paper mode.",
+        )
+
+    portfolio = await db.get(Portfolio, portfolio_id)
+    if portfolio is None or portfolio.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Portfolio not found",
+        )
+
+    if portfolio.status is not PortfolioStatus.ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Strategy execution requires an active portfolio",
+        )
+
+    try:
+        from app.tasks.strategy_tasks import execute_strategy_signal_task
+        task = execute_strategy_signal_task.delay(str(strategy.id), str(portfolio.id))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Strategy execution queue is unavailable",
+        ) from exc
+
+    await log_audit(
+        db,
+        action="strategy.signal_execution_queued",
+        user_id=current_user.id,
+        resource_id=str(strategy.id),
+        details={"portfolio_id": str(portfolio.id), "task_id": task.id},
+    )
+    return {
+        "status": "queued",
+        "strategy_id": str(strategy.id),
+        "portfolio_id": str(portfolio.id),
+        "task_id": task.id,
+    }
 
 
 @router.post("/{strategy_id}/stop")
