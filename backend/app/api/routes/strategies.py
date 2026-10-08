@@ -84,6 +84,7 @@ async def run_backtest(
         end_date=data.end_date,
         initial_capital=data.initial_capital,
         configuration_fingerprint=fingerprint,
+        identity_key=f"{strategy.id}:{RunMode.BACKTEST.value}:{fingerprint}",
         data_source="yfinance",
         data_revision="provider-runtime",
         input_snapshot={
@@ -347,6 +348,7 @@ async def cancel_backtest_run(run_id: uuid.UUID, current_user: CurrentUser, db: 
     if run.status in {RunStatus.COMPLETED, RunStatus.FAILED, RunStatus.CANCELLED}:
         return {"run_id": str(run.id), "status": run.status.value}
     run.status = RunStatus.CANCELLED
+    run.identity_key = None
     run.completed_at = datetime.now(timezone.utc)
     await db.flush()
     return {"run_id": str(run.id), "status": run.status.value}
