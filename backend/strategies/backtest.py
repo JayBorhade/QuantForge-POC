@@ -11,6 +11,7 @@ import pandas as pd
 import yfinance as yf
 
 from app.backtesting.simulator import BacktestSimulator
+from app.backtesting.metrics import risk_analytics
 from app.backtesting.types import BacktestBar, BacktestConfig
 from strategies.registry import get_strategy
 
@@ -54,6 +55,12 @@ class BacktestEngine:
             slippage_pct=Decimal(str((parameters or {}).get("slippage_pct", "0.0005"))),
         )
         result = BacktestSimulator().run(bars, signal_rows, config)
+        analytics = risk_analytics(
+            list(result.equity_curve),
+            list(result.trades),
+            result.initial_capital,
+            result.final_capital,
+        )
         return {
             "strategy_id": strategy_id, "symbol": symbol,
             "start_date": start_date.isoformat(), "end_date": end_date.isoformat(),
@@ -65,6 +72,7 @@ class BacktestEngine:
             "total_trades": result.total_trades,
             "final_capital": round(float(result.final_capital), 4),
             "equity_curve": list(result.equity_curve)[-100:],
+            "analytics": analytics,
             "trade_history": [
                 {
                     "entry": float(t.entry_price), "exit": float(t.exit_price),
