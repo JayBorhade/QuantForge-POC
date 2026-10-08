@@ -3,6 +3,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
+from app.tasks.strategy_tasks import build_paper_run_identity
 from app.services.strategy_scheduler import (
     MAX_CATCH_UP,
     _scheduled_occurrence,
@@ -29,6 +30,17 @@ class StrategySchedulerTests(unittest.TestCase):
         now = datetime(2026, 10, 8, 10, 15, 42, tzinfo=timezone.utc)
         occurrence = _scheduled_occurrence("0 * * * *", now)
         self.assertGreater(now - occurrence, MAX_CATCH_UP)
+
+    def test_paper_run_identity_is_stable_for_a_schedule_slot(self):
+        identity = build_paper_run_identity(
+            "strategy-123", "2026-10-08T10:15:00+00:00"
+        )
+        self.assertEqual(identity, "strategy-123:paper:2026-10-08T10:15:00+00:00")
+
+    def test_paper_run_identity_changes_with_schedule_slot(self):
+        first = build_paper_run_identity("strategy-123", "2026-10-08T10:15:00+00:00")
+        second = build_paper_run_identity("strategy-123", "2026-10-08T10:20:00+00:00")
+        self.assertNotEqual(first, second)
 
     def test_scheduler_state_is_persisted_in_model_and_migration(self):
         root = Path(__file__).resolve().parents[1]

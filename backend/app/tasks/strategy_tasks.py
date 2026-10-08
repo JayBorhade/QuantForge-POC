@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.celery_app import celery_app
 
@@ -22,31 +22,41 @@ def _run_async(coro):
         return asyncio.run(coro)
 
 
+def build_paper_run_identity(strategy_id: str, scheduled_for: str | None) -> str:
+    """Build the stable identity used to make scheduled paper runs replay-safe."""
+    slot = scheduled_for or datetime.now(timezone.utc).replace(second=0, microsecond=0).isoformat()
+    return f"{strategy_id}:paper:{slot}"
+
+
 @celery_app.task(bind=True, max_retries=3)
 def run_strategy_task(self, strategy_id: str, mode: str = "paper"):
-    logger.info("Running strategy %s in %s mode", strategy_id, mode)
+    """Compatibility task that routes strategy starts through the canonical runtime."""
+    logger.info("Starting strategy %s in %s mode", strategy_id, mode)
     try:
         from app.db.sync_session import get_sync_db
         from app.models.strategy import Strategy, StrategyStatus
-        from strategies.engine import StrategyEngine
 
         with get_sync_db() as db:
             strategy = db.get(Strategy, uuid.UUID(strategy_id))
             if not strategy:
                 return {"error": "Strategy not found"}
-
-            engine = StrategyEngine()
-            result = engine.execute_strategy(
-                strategy_type=strategy.strategy_type.value,
-                symbol=strategy.symbol,
-                parameters=strategy.parameters or {},
-                mode=mode,
-            )
+            if mode != "paper" or not strategy.is_paper:
+                raise ValueError("Only paper strategy runtime is enabled")
             strategy.status = StrategyStatus.ACTIVE
             db.commit()
-            return result
+
+        if strategy.schedule_portfolio_id is None:
+            return {
+                "status": "activated",
+                "strategy_id": strategy_id,
+                "reason": "no execution portfolio configured",
+            }
+
+        return execute_strategy_signal_task.run(
+            strategy_id, str(strategy.schedule_portfolio_id), None
+        )
     except Exception as exc:
-        logger.exception("Strategy execution failed: %s", exc)
+        logger.exception("Strategy start failed: %s", exc)
         raise self.retry(exc=exc, countdown=60)
 
 
@@ -71,49 +81,108 @@ def run_backtest_task(
     )
 
 
-@celery_app.task(bind=True, max_retries=0)
-def execute_strategy_signal_task(self, strategy_id: str, portfolio_id: str):
-    """Evaluate and execute the latest paper strategy signal for a portfolio."""
+@celery_app.task(bind=True, max_retries=2, ignore_result=False)
+def execute_strategy_signal_task(
+    self,
+    strategy_id: str,
+    portfolio_id: str,
+    scheduled_for: str | None = None,
+):
+    """Evaluate one paper signal, persist its run, and execute it exactly once."""
     async def _execute():
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
 
         from app.db.session import AsyncSessionLocal
         from app.models.portfolio import Portfolio
-        from app.models.strategy import Strategy
+        from app.models.strategy import RunMode, RunStatus, Strategy, StrategyRun
         from app.services.strategy_execution import StrategyExecutionService
         from strategies.engine import StrategyEngine
 
+        identity_key = build_paper_run_identity(strategy_id, scheduled_for)
         async with AsyncSessionLocal() as db:
             strategy = await db.get(Strategy, uuid.UUID(strategy_id))
             if strategy is None:
                 raise ValueError("Strategy not found")
+            if not strategy.is_paper:
+                raise ValueError("Only paper strategies can enter the runtime")
 
             result = await db.execute(
                 select(Portfolio)
                 .options(selectinload(Portfolio.positions))
-                .where(Portfolio.id == uuid.UUID(portfolio_id), Portfolio.user_id == strategy.user_id)
+                .where(
+                    Portfolio.id == uuid.UUID(portfolio_id),
+                    Portfolio.user_id == strategy.user_id,
+                )
             )
             portfolio = result.scalar_one_or_none()
             if portfolio is None:
                 raise ValueError("Portfolio not found for strategy owner")
 
-            engine = StrategyEngine()
-            data = engine.fetch_data(strategy.symbol)
-            result = await StrategyExecutionService().execute_latest_signal(
-                db=db,
-                strategy=strategy,
-                portfolio=portfolio,
-                data=data,
+            run_result = await db.execute(
+                select(StrategyRun).where(StrategyRun.identity_key == identity_key).limit(1)
             )
-            await db.commit()
-            return result
+            run = run_result.scalar_one_or_none()
+            if run is None:
+                run = StrategyRun(
+                    strategy_id=strategy.id,
+                    mode=RunMode.PAPER,
+                    status=RunStatus.RUNNING,
+                    identity_key=identity_key,
+                    start_date=datetime.now(timezone.utc),
+                    input_snapshot={
+                        "strategy_type": strategy.strategy_type.value,
+                        "symbol": strategy.symbol,
+                        "parameters": strategy.parameters or {},
+                        "portfolio_id": str(portfolio.id),
+                        "scheduled_for": scheduled_for,
+                    },
+                    data_source="strategy_engine",
+                    data_revision="provider-runtime",
+                    started_at=datetime.now(timezone.utc),
+                )
+                db.add(run)
+                await db.flush()
+            elif run.status is RunStatus.COMPLETED:
+                return run.results or {"status": "completed", "run_id": str(run.id)}
+            else:
+                run.status = RunStatus.RUNNING
+                run.error_message = None
+                run.started_at = datetime.now(timezone.utc)
+
+            try:
+                engine = StrategyEngine()
+                data = engine.fetch_data(strategy.symbol)
+                execution_result = await StrategyExecutionService().execute_latest_signal(
+                    db=db,
+                    strategy=strategy,
+                    portfolio=portfolio,
+                    data=data,
+                )
+                completed_at = datetime.now(timezone.utc)
+                run.status = RunStatus.COMPLETED
+                run.completed_at = completed_at
+                run.end_date = completed_at
+                run.total_trades = 1 if execution_result.get("status") == "executed" else 0
+                run.results = {
+                    "execution": execution_result,
+                    "scheduled_for": scheduled_for,
+                }
+                await db.commit()
+                return {"run_id": str(run.id), **execution_result}
+            except Exception as exc:
+                run.status = RunStatus.FAILED
+                run.completed_at = datetime.now(timezone.utc)
+                run.end_date = run.completed_at
+                run.error_message = str(exc)[:2000]
+                await db.commit()
+                raise
 
     try:
         return _run_async(_execute())
-    except Exception:
+    except Exception as exc:
         logger.exception("Strategy signal execution failed for strategy %s", strategy_id)
-        raise
+        raise self.retry(exc=exc, countdown=60)
 
 
 @celery_app.task(bind=True, max_retries=0, ignore_result=False)

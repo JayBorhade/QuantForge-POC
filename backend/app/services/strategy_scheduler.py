@@ -114,7 +114,7 @@ def dispatch_due_strategies(now: datetime | None = None) -> dict:
                 f"{occurrence.strftime('%Y%m%dT%H%M')}"
             )
             execute_strategy_signal_task.apply_async(
-                args=[str(strategy.id), str(strategy.schedule_portfolio_id)],
+                args=[str(strategy.id), str(strategy.schedule_portfolio_id), occurrence.isoformat()],
                 task_id=task_id,
                 expires=55,
             )
