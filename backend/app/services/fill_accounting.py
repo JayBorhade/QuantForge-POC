@@ -97,6 +97,8 @@ class FillService:
             self.db.add(position)
             await self.db.flush()
 
+        entry_cost_before = position.average_cost
+
         if order.side is OrderSide.BUY:
             old_qty = position.quantity
             new_qty = old_qty + quantity
@@ -151,4 +153,14 @@ class FillService:
             else OrderStatus.PARTIALLY_FILLED
         )
         await self.db.flush()
+
+        from app.services.trade_ledger import TradeLedgerService
+        await TradeLedgerService(self.db).record_fill(
+            order=order,
+            quantity=quantity,
+            price=price,
+            fee=fee,
+            executed_at=fill.executed_at,
+            entry_cost_before=entry_cost_before,
+        )
         return fill
