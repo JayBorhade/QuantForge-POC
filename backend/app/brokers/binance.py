@@ -65,6 +65,8 @@ class BinanceBrokerAdapter:
 
     async def submit_order(self, request: BrokerOrderRequest) -> BrokerOrderResult:
         symbol = request.symbol.replace("/", "").upper()
+        if len(request.client_order_id) > 36:
+            raise ValueError("Binance client_order_id must be 36 characters or fewer")
         params: dict[str, Any] = {
             "symbol": symbol,
             "side": request.side.value.upper(),
