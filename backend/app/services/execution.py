@@ -61,6 +61,7 @@ class ExecutionService:
             side=side,
             quantity=quantity,
             estimated_price=risk_price,
+            strategy_id=strategy_id,
         )
 
         order = Order(
