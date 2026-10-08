@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.order import ExecutionMode, Order, OrderSide, OrderStatus, OrderType
 from app.brokers.base import BrokerOrderRequest, BrokerAdapter, BrokerSubmissionUnknown
 from app.models.portfolio import Portfolio
-from app.services.risk import RiskService
+from app.services.risk import RiskRejected, RiskService
 from app.services.order_lifecycle import OrderStatusMapper
 from app.services.audit import log_audit
 
@@ -55,14 +55,30 @@ class ExecutionService:
 
         normalized_symbol = symbol.strip().upper()
         risk_price = estimated_price if estimated_price is not None else limit_price
-        await RiskService(self.db).require_approval(
-            portfolio=portfolio,
-            symbol=normalized_symbol,
-            side=side,
-            quantity=quantity,
-            estimated_price=risk_price,
-            strategy_id=strategy_id,
-        )
+        try:
+            await RiskService(self.db).require_approval(
+                portfolio=portfolio,
+                symbol=normalized_symbol,
+                side=side,
+                quantity=quantity,
+                estimated_price=risk_price,
+                strategy_id=strategy_id,
+            )
+        except RiskRejected as exc:
+            await log_audit(
+                self.db,
+                action="order.risk_rejected",
+                resource="portfolio",
+                resource_id=str(portfolio.id),
+                details={
+                    "symbol": normalized_symbol,
+                    "side": side.value,
+                    "quantity": str(quantity),
+                    "reason": str(exc),
+                    "strategy_id": str(strategy_id) if strategy_id else None,
+                },
+            )
+            raise
 
         order = Order(
             portfolio_id=portfolio.id,
