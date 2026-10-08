@@ -4,7 +4,7 @@ import asyncio
 import unittest
 import uuid
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models.cash_ledger import CashLedgerEntry
 from app.models.execution_fill import ExecutionFill
@@ -33,6 +33,11 @@ def make_order(*, side=OrderSide.BUY, mode=ExecutionMode.PAPER, quantity="10"):
 
 
 class FillAccountingTests(unittest.TestCase):
+    def setUp(self):
+        self.trade_projection = patch("app.services.fill_accounting.TradeLedgerService.record_fill", new=AsyncMock())
+        self.trade_projection.start()
+        self.addCleanup(self.trade_projection.stop)
+
     def test_duplicate_broker_fill_is_idempotent(self):
         order = make_order()
         existing = ExecutionFill(order_id=order.id, broker_fill_id="fill-1", quantity=Decimal("1"), price=Decimal("100"))

@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.cash_ledger import CashLedgerService
+from app.services.trade_ledger import TradeLedgerService
 from app.models.execution_fill import ExecutionFill
 from app.models.order import ExecutionMode, Order, OrderSide, OrderStatus
 from app.models.portfolio import Portfolio
@@ -97,6 +98,8 @@ class FillService:
             self.db.add(position)
             await self.db.flush()
 
+        entry_cost_before = position.average_cost
+
         if order.side is OrderSide.BUY:
             old_qty = position.quantity
             new_qty = old_qty + quantity
@@ -151,4 +154,13 @@ class FillService:
             else OrderStatus.PARTIALLY_FILLED
         )
         await self.db.flush()
+
+        await TradeLedgerService(self.db).record_fill(
+            order=order,
+            quantity=quantity,
+            price=price,
+            fee=fee,
+            executed_at=fill.executed_at,
+            entry_cost_before=entry_cost_before,
+        )
         return fill
