@@ -52,9 +52,9 @@ def run_strategy_task(self, strategy_id: str, mode: str = "paper"):
                 "reason": "no execution portfolio configured",
             }
 
-        return execute_strategy_signal_task.apply(
-            args=[strategy_id, str(strategy.schedule_portfolio_id), None]
-        ).get()
+        return execute_strategy_signal_task.run(
+            strategy_id, str(strategy.schedule_portfolio_id), None
+        )
     except Exception as exc:
         logger.exception("Strategy start failed: %s", exc)
         raise self.retry(exc=exc, countdown=60)
