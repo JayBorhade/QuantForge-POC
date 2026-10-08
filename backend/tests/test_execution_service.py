@@ -3,7 +3,7 @@
 import asyncio
 import unittest
 from decimal import Decimal
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.brokers.base import BrokerSubmissionUnknown
 from app.models.order import ExecutionMode, OrderSide, OrderStatus, OrderType
@@ -38,7 +38,9 @@ class ExecutionValidationTests(unittest.TestCase):
 
     def test_uncertain_submission_is_not_marked_failed(self):
         db = AsyncMock()
-        db.execute.return_value.scalar_one_or_none.return_value = None
+        query_result = MagicMock()
+        query_result.scalar_one_or_none.return_value = None
+        db.execute.return_value = query_result
         broker = AsyncMock()
         broker.submit_order.side_effect = BrokerSubmissionUnknown("network timeout after send")
         service = ExecutionService(db, broker)
