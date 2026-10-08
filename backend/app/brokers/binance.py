@@ -180,11 +180,7 @@ class BinanceBrokerAdapter:
         normalized = symbol.replace("/", "").upper()
         params = self._signed_params({"symbol": normalized, "orderId": broker_order_id})
         async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
-            response = await client.get(
-                f"{self.BASE_URL}/api/v3/order",
-                headers=self._headers(),
-                params=params,
-            )
+            response = await client.get(f"{self.BASE_URL}/api/v3/order", headers=self._headers(), params=params)
             response.raise_for_status()
             data = response.json()
         executed_qty = Decimal(str(data.get("executedQty", "0")))
@@ -202,3 +198,16 @@ class BinanceBrokerAdapter:
             cumulative_fee=cumulative_fee,
             fee_currency=fee_currency,
         )
+
+    async def get_quote(self, symbol: str) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
+            response = await client.get(f"{self.BASE_URL}/api/v3/ticker/price", params={"symbol": symbol.replace("/", "").upper()})
+            response.raise_for_status()
+            data = response.json()
+            return {"symbol": symbol, "price": Decimal(str(data["price"])), "broker": "binance"}
+
+    async def get_positions(self) -> list[dict[str, Any]]:
+        async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
+            response = await client.get(f"{self.BASE_URL}/api/v3/account", headers=self._headers(), params=self._signed_params({"recvWindow": 5000}))
+            response.raise_for_status()
+            return response.json().get("balances", [])
