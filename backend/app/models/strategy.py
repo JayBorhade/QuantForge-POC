@@ -111,6 +111,8 @@ class StrategyRun(Base):
     data_revision: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     initial_capital: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 4), nullable=True)
     input_snapshot: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    worker_token: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    worker_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
