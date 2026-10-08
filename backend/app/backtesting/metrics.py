@@ -146,7 +146,7 @@ def trade_statistics(trades: Sequence[BacktestTrade]) -> dict:
     return {
         "gross_profit": round(gross_profit, 8),
         "gross_loss": round(gross_loss, 8),
-        "profit_factor": round(gross_profit / gross_loss, 8) if gross_loss else (float("inf") if gross_profit else 0.0),
+        "profit_factor": round(gross_profit / gross_loss, 8) if gross_loss else (None if gross_profit else 0.0),
         "average_trade_pnl": round(sum(float(t.pnl) for t in trades) / len(trades), 8),
         "best_trade_pnl": round(max(float(t.pnl) for t in trades), 8),
         "worst_trade_pnl": round(min(float(t.pnl) for t in trades), 8),
