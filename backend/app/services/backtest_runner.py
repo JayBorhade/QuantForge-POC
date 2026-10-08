@@ -118,11 +118,19 @@ def run_backtest_for_strategy(
                 **result,
             }
         except Exception as e:
+            # Cancellation or lease loss wins over a late worker exception.
+            # Never convert a run that another actor cancelled/reclaimed into FAILED.
+            db.refresh(run)
+            if run.status == RunStatus.CANCELLED or run.worker_token != lease_token:
+                return {
+                    "run_id": str(run.id),
+                    "status": run.status.value,
+                    "message": "Backtest worker lease no longer owns this run",
+                }
             run.status = RunStatus.FAILED
             run.error_message = str(e)
             run.completed_at = datetime.now(timezone.utc)
-            if run.worker_token == lease_token:
-                run.worker_token = None
-                run.worker_started_at = None
-                run.identity_key = None
+            run.worker_token = None
+            run.worker_started_at = None
+            run.identity_key = None
             raise
