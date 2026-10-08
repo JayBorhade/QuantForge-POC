@@ -1,12 +1,16 @@
+import nextPlugin from "@next/eslint-plugin-next";
 import { globalIgnores } from "eslint/config";
-import nextVitalsModule from "eslint-config-next/core-web-vitals.js";
-
-const nextVitals = Array.isArray(nextVitalsModule)
-  ? nextVitalsModule
-  : nextVitalsModule?.default ?? [nextVitalsModule];
 
 export default [
-  ...nextVitals,
+  {
+    files: ["**/*.{js,jsx,ts,tsx}"],
+    plugins: {
+      "@next/next": nextPlugin,
+    },
+    rules: {
+      ...nextPlugin.configs.recommended.rules,
+    },
+  },
   globalIgnores([
     ".next/**",
     "out/**",
