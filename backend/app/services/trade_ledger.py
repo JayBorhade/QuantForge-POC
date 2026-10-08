@@ -1,6 +1,6 @@
 """Canonical projection from execution fills to portfolio trades."""
 
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -34,12 +34,6 @@ class TradeLedgerService:
         executed_at: datetime,
         entry_cost_before: Decimal,
     ) -> Trade:
-        """Project one fill into an auditable trade record.
-
-        BUY fills accumulate into one open trade for the position. SELL fills
-        close against the current position cost and create a closed trade.
-        Partial exits reduce the open trade without losing historical P&L.
-        """
         mode = _MODE_MAP.get(order.mode)
         if mode is None:
             raise TradeLedgerError(f"Unsupported execution mode: {order.mode}")
@@ -60,7 +54,6 @@ class TradeLedgerService:
                 .with_for_update()
             )
             trade = result.scalar_one_or_none()
-
             if trade is None:
                 trade = Trade(
                     portfolio_id=order.portfolio_id,
@@ -138,39 +131,25 @@ class TradeLedgerService:
             remaining -= close_qty
 
         if remaining > 0:
-            # Preserve an auditable closed trade even when the position
-            # predates the Trade ledger.
             fallback_trade = Trade(
-                    portfolio_id=order.portfolio_id,
-                    strategy_id=order.strategy_id,
-                    symbol=order.symbol,
-                    side=TradeSide.SELL,
-                    status=TradeStatus.CLOSED,
-                    mode=mode,
-                    quantity=remaining,
-                    entry_price=entry_cost_before,
-                    exit_price=price,
-                    pnl=(price - entry_cost_before) * remaining,
-                    fees=fee * (remaining / quantity),
-                    broker_order_id=order.broker_order_id,
-                    closed_at=executed_at,
-                )
+                portfolio_id=order.portfolio_id,
+                strategy_id=order.strategy_id,
+                symbol=order.symbol,
+                side=TradeSide.SELL,
+                status=TradeStatus.CLOSED,
+                mode=mode,
+                quantity=remaining,
+                entry_price=entry_cost_before,
+                exit_price=price,
+                pnl=(price - entry_cost_before) * remaining,
+                fees=fee * (remaining / quantity),
+                broker_order_id=order.broker_order_id,
+                closed_at=executed_at,
+            )
             self.db.add(fallback_trade)
             last_closed_trade = fallback_trade
 
         await self.db.flush()
+        if last_closed_trade is None:
+            raise TradeLedgerError("Sell fill could not be projected into trade history")
         return last_closed_trade
-            portfolio_id=order.portfolio_id,
-            strategy_id=order.strategy_id,
-            symbol=order.symbol,
-            side=TradeSide.SELL,
-            status=TradeStatus.CLOSED,
-            mode=mode,
-            quantity=remaining,
-            entry_price=entry_cost_before,
-            exit_price=price,
-            pnl=(price - entry_cost_before) * remaining,
-            fees=fee,
-            broker_order_id=order.broker_order_id,
-            closed_at=executed_at,
-        )
