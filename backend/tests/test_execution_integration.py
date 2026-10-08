@@ -4,7 +4,7 @@ import asyncio
 import unittest
 import uuid
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.brokers.paper_adapter import PaperBrokerAdapter
 from app.models.order import ExecutionMode, OrderSide, OrderStatus, OrderType
@@ -38,8 +38,9 @@ class ExecutionIntegrationTests(unittest.TestCase):
         db.flush = AsyncMock()
         broker = PaperBrokerAdapter()
 
-        order = asyncio.run(
-            ExecutionService(db, broker).submit(
+        with patch("app.services.execution.RiskService.require_approval", new=AsyncMock()):
+            order = asyncio.run(
+                ExecutionService(db, broker).submit(
                 portfolio=portfolio,
                 symbol=" reliance ",
                 side=OrderSide.BUY,
@@ -47,9 +48,9 @@ class ExecutionIntegrationTests(unittest.TestCase):
                 mode=ExecutionMode.LIVE,
                 client_order_id="client-1",
                 order_type=OrderType.LIMIT,
-                limit_price=Decimal("2500"),
+                    limit_price=Decimal("2500"),
+                )
             )
-        )
 
         self.assertEqual(order.status, OrderStatus.SUBMITTED)
         self.assertEqual(order.symbol, "RELIANCE")
