@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from sqlalchemy import func, select
 from app.models.execution_fill import ExecutionFill
+from app.models.portfolio import Portfolio
 from app.models.order import Order, OrderStatus
 from app.services.audit import log_audit
 from app.services.fill_accounting import FillService, FillAccountingError
@@ -113,8 +114,13 @@ class OrderLifecycleService:
             if broker_result.cumulative_fee is not None:
                 if broker_result.cumulative_fee < 0:
                     raise ValueError("Broker reported a negative cumulative fee")
-                if broker_result.fee_currency and broker_result.fee_currency.upper() != locked.portfolio.currency.upper():
-                    raise ValueError("Broker fee currency does not match portfolio currency")
+                if broker_result.fee_currency:
+                    portfolio_result = await self.db.execute(
+                        select(Portfolio.currency).where(Portfolio.id == locked.portfolio_id)
+                    )
+                    portfolio_currency = portfolio_result.scalar_one_or_none()
+                    if portfolio_currency and broker_result.fee_currency.upper() != portfolio_currency.upper():
+                        raise ValueError("Broker fee currency does not match portfolio currency")
                 fee_result = await self.db.execute(
                     select(func.coalesce(func.sum(ExecutionFill.fee), 0)).where(
                         ExecutionFill.order_id == locked.id
