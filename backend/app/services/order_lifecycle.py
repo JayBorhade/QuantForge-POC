@@ -1,5 +1,7 @@
 """Canonical order lifecycle and broker-status mapping."""
 
+from decimal import Decimal
+
 from sqlalchemy import select
 from app.models.order import Order, OrderStatus
 from app.services.audit import log_audit
@@ -100,12 +102,17 @@ class OrderLifecycleService:
             if broker_result.average_fill_price is None or broker_result.average_fill_price <= 0:
                 raise ValueError("Broker reported additional quantity without a valid average fill price")
             delta_quantity = broker_filled - previous_filled
+            previous_notional = previous_filled * (locked.average_fill_price or Decimal("0"))
+            cumulative_notional = broker_filled * broker_result.average_fill_price
+            incremental_price = (cumulative_notional - previous_notional) / delta_quantity
+            if incremental_price <= 0:
+                raise ValueError("Broker reported a non-positive incremental fill price")
             fill_key = f"broker:{locked.broker_order_id}:filled:{broker_filled}"
             try:
                 await FillService(self.db).apply_fill(
                     order_id=locked.id,
                     quantity=delta_quantity,
-                    price=broker_result.average_fill_price,
+                    price=incremental_price,
                     broker_fill_id=fill_key,
                 )
             except FillAccountingError as exc:
