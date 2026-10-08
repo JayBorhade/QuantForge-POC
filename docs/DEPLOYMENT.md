@@ -93,3 +93,22 @@ Take a database backup before destructive schema changes. Never manually edit pr
 - [ ] Broker credentials validated
 - [ ] Paper-trading soak test completed
 - [ ] Live trading approval explicitly granted
+
+
+## 11. Pre-release verification
+
+Run the repository CI-equivalent checks before a release:
+
+```bash
+cd backend
+python -m compileall -q app strategies tests
+python -m unittest discover -s tests -v
+
+cd ../frontend
+npm install
+npm run typecheck
+npm run lint
+npm run build
+```
+
+The backend configuration now fails fast for non-local environments unless explicit secrets, database, encryption key, secure cookies, trusted CORS origins, CSRF and non-debug settings are provided. Development defaults are intentionally limited to local/test environments.

@@ -46,11 +46,12 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+configured_cors_origins = set(settings.cors_origins)
+if not settings.is_production:
+    configured_cors_origins.update({settings.frontend_url, "http://127.0.0.1:3000"})
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=list(
-        set(settings.cors_origins + [settings.frontend_url, "http://127.0.0.1:3000"])
-    ),
+    allow_origins=sorted(configured_cors_origins),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
