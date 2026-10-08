@@ -55,6 +55,11 @@ jobs:
           SECRET_KEY: ci-secret-key-for-testing-min-32-chars!!
           JWT_SECRET_KEY: ci-jwt-secret-key-for-testing-min-32!!
         run: alembic upgrade head
+      - name: Validate production Compose and operational scripts
+        run: |
+          docker compose -f docker-compose.production.yml config
+          bash -n scripts/backup-postgres.sh
+
       - name: API startup smoke tests
         working-directory: backend
         env:
@@ -78,3 +83,5 @@ jobs:
         run: |
           npm install
           npm run build
+      - name: Build production frontend image
+        run: docker build --file frontend/Dockerfile.prod --tag quantforge-frontend:ci frontend
