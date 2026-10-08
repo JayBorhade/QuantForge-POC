@@ -2,7 +2,7 @@
 from alembic import op
 import sqlalchemy as sa
 
-revision = "20261008_0009_backtest_lifecycle_hardening"
+revision = "20261008_0009"
 down_revision = "20261008_0008"
 branch_labels = None
 depends_on = None
