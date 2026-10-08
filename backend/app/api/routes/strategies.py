@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import List
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
@@ -95,7 +96,31 @@ async def run_backtest(
         },
     )
     db.add(run)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        existing = await db.execute(
+            select(StrategyRun).where(
+                StrategyRun.strategy_id == strategy.id,
+                StrategyRun.mode == RunMode.BACKTEST,
+                StrategyRun.configuration_fingerprint == fingerprint,
+            ).limit(1)
+        )
+        existing_run = existing.scalar_one_or_none()
+        if existing_run is None:
+            raise
+        return BacktestResponse(
+            run_id=existing_run.id,
+            status=existing_run.status.value,
+            sharpe_ratio=float(existing_run.sharpe_ratio) if existing_run.sharpe_ratio is not None else None,
+            max_drawdown=float(existing_run.max_drawdown) if existing_run.max_drawdown is not None else None,
+            total_return=float(existing_run.total_return) if existing_run.total_return is not None else None,
+            win_rate=float(existing_run.win_rate) if existing_run.win_rate is not None else None,
+            total_trades=existing_run.total_trades,
+            equity_curve=(existing_run.results or {}).get("equity_curve"),
+            trade_history=(existing_run.results or {}).get("trade_history"),
+        )
     await db.refresh(run)
 
     def _execute():
