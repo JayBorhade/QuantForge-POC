@@ -105,7 +105,7 @@ async def run_backtest(
             select(StrategyRun).where(
                 StrategyRun.strategy_id == strategy.id,
                 StrategyRun.mode == RunMode.BACKTEST,
-                StrategyRun.configuration_fingerprint == fingerprint,
+                StrategyRun.identity_key == f"{strategy.id}:{RunMode.BACKTEST.value}:{fingerprint}",
             ).limit(1)
         )
         existing_run = existing.scalar_one_or_none()
