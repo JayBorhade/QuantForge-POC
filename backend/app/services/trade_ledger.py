@@ -92,6 +92,7 @@ class TradeLedgerService:
             raise TradeLedgerError("Sell fill requires a positive entry cost")
 
         remaining = quantity
+        last_closed_trade = None
         result = await self.db.execute(
             select(Trade)
             .where(
@@ -128,6 +129,7 @@ class TradeLedgerService:
                 closed_at=executed_at,
             )
             self.db.add(closed)
+            last_closed_trade = closed
             trade.quantity -= close_qty
             trade.fees += fee * (close_qty / quantity)
             if trade.quantity == 0:
@@ -157,4 +159,18 @@ class TradeLedgerService:
             )
 
         await self.db.flush()
-        return closed
+        return last_closed_trade or Trade(
+            portfolio_id=order.portfolio_id,
+            strategy_id=order.strategy_id,
+            symbol=order.symbol,
+            side=TradeSide.SELL,
+            status=TradeStatus.CLOSED,
+            mode=mode,
+            quantity=remaining,
+            entry_price=entry_cost_before,
+            exit_price=price,
+            pnl=(price - entry_cost_before) * remaining,
+            fees=fee,
+            broker_order_id=order.broker_order_id,
+            closed_at=executed_at,
+        )
