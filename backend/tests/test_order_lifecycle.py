@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from app.brokers.base import BrokerOrderResult
 from app.models.order import OrderStatus
+from decimal import Decimal
 from app.services.order_lifecycle import OrderLifecycleService, OrderStatusMapper
 
 
@@ -119,6 +120,30 @@ class OrderLifecycleTests(unittest.TestCase):
         self.assertEqual(audit.await_args.kwargs["action"], "order.reconciled")
         self.assertEqual(audit.await_args.kwargs["details"]["previous_status"], "submitted")
         self.assertEqual(audit.await_args.kwargs["details"]["new_status"], "partially_filled")
+
+    def test_reconcile_ingests_new_cumulative_fill(self):
+        db = MagicMock()
+        db.flush = AsyncMock()
+        locked = MagicMock(
+            id="order-1", status=OrderStatus.SUBMITTED, broker_order_id="broker-1",
+            filled_quantity=Decimal("2"), quantity=Decimal("4"),
+            average_fill_price=Decimal("100"),
+        )
+        db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: locked))
+        broker = MagicMock()
+        broker.get_order = AsyncMock(return_value=BrokerOrderResult(
+            "broker-1", "filled", filled_quantity=Decimal("4"), average_fill_price=Decimal("105")
+        ))
+        fill = MagicMock()
+        with patch("app.services.order_lifecycle.FillService.apply_fill", new=AsyncMock(return_value=fill)) as apply:
+            result = asyncio.run(OrderLifecycleService(db, broker).reconcile(locked))
+
+        self.assertIs(result, locked)
+        apply.assert_awaited_once()
+        kwargs = apply.await_args.kwargs
+        self.assertEqual(kwargs["quantity"], Decimal("2"))
+        self.assertEqual(kwargs["price"], Decimal("110"))
+        self.assertEqual(kwargs["broker_fill_id"], "broker:broker-1:filled:4")
 
     def test_reconcile_does_not_regress_filled_order(self):
         db = MagicMock()
