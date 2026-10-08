@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 
 import httpx
 
-from app.brokers.base import BrokerOrderRequest, BrokerOrderResult
+from app.brokers.base import BrokerOrderRequest, BrokerOrderResult, BrokerSubmissionUnknown
 from app.models.order import OrderType
 
 
@@ -32,11 +32,7 @@ class BinanceBrokerAdapter:
     def _signed_params(self, params: dict[str, Any]) -> dict[str, Any]:
         params = {**params, "timestamp": int(time.time() * 1000)}
         query = urlencode(params)
-        params["signature"] = hmac.new(
-            self.api_secret.encode(),
-            query.encode(),
-            hashlib.sha256,
-        ).hexdigest()
+        params["signature"] = hmac.new(self.api_secret.encode(), query.encode(), hashlib.sha256).hexdigest()
         return params
 
     @staticmethod
@@ -78,18 +74,45 @@ class BinanceBrokerAdapter:
             if request.limit_price is None:
                 raise ValueError("Binance LIMIT order requires limit_price")
             params.update({"price": format(request.limit_price, "f"), "timeInForce": "GTC"})
-
         params.update(request.broker_params)
-        async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
-            response = await client.post(
-                f"{self.BASE_URL}/api/v3/order",
-                headers=self._headers(),
-                params=self._signed_params(params),
-            )
-            data = response.json()
-            if response.status_code >= 400 or "orderId" not in data:
-                raise RuntimeError(data.get("msg") or f"Binance order failed ({response.status_code})")
-            return BrokerOrderResult(f"binance:{symbol}:{data['orderId']}", self._status(str(data.get("status", "NEW"))))
+        try:
+            async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
+                response = await client.post(
+                    f"{self.BASE_URL}/api/v3/order",
+                    headers=self._headers(),
+                    params=self._signed_params(params),
+                )
+        except httpx.TransportError as exc:
+            raise BrokerSubmissionUnknown(f"Binance submission transport outcome is unknown: {exc}") from exc
+        data = response.json()
+        if response.status_code >= 400 or "orderId" not in data:
+            raise RuntimeError(data.get("msg") or f"Binance order failed ({response.status_code})")
+        return BrokerOrderResult(f"binance:{symbol}:{data['orderId']}", self._status(str(data.get("status", "NEW"))))
+
+    async def find_order_by_client_order_id(self, client_order_id: str, symbol: str) -> BrokerOrderResult | None:
+        normalized = symbol.replace("/", "").upper()
+        params = self._signed_params({"symbol": normalized, "origClientOrderId": client_order_id})
+        try:
+            async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.BASE_URL}/api/v3/order",
+                    headers=self._headers(),
+                    params=params,
+                )
+        except httpx.TransportError as exc:
+            raise BrokerSubmissionUnknown(f"Binance reconciliation transport outcome is unknown: {exc}") from exc
+        if response.status_code == 404:
+            return None
+        data = response.json()
+        if response.status_code >= 400:
+            message = str(data.get("msg", "Binance order lookup failed"))
+            if "Unknown order" in message:
+                return None
+            raise RuntimeError(message)
+        order_id = data.get("orderId")
+        if order_id is None:
+            return None
+        return BrokerOrderResult(f"binance:{normalized}:{order_id}", self._status(str(data.get("status", "NEW"))))
 
     @staticmethod
     def _parse_order_id(broker_order_id: str) -> tuple[str, str]:
@@ -105,11 +128,7 @@ class BinanceBrokerAdapter:
     async def cancel_order_for_symbol(self, symbol: str, broker_order_id: str) -> None:
         params = self._signed_params({"symbol": symbol.replace("/", "").upper(), "orderId": broker_order_id})
         async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
-            response = await client.delete(
-                f"{self.BASE_URL}/api/v3/order",
-                headers=self._headers(),
-                params=params,
-            )
+            response = await client.delete(f"{self.BASE_URL}/api/v3/order", headers=self._headers(), params=params)
             response.raise_for_status()
             data = response.json()
             if "orderId" not in data:
@@ -122,34 +141,20 @@ class BinanceBrokerAdapter:
     async def get_order_for_symbol(self, symbol: str, broker_order_id: str) -> BrokerOrderResult:
         params = self._signed_params({"symbol": symbol.replace("/", "").upper(), "orderId": broker_order_id})
         async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
-            response = await client.get(
-                f"{self.BASE_URL}/api/v3/order",
-                headers=self._headers(),
-                params=params,
-            )
+            response = await client.get(f"{self.BASE_URL}/api/v3/order", headers=self._headers(), params=params)
             response.raise_for_status()
             data = response.json()
-            return BrokerOrderResult(
-                broker_order_id=broker_order_id,
-                status=self._status(str(data.get("status", ""))),
-            )
+            return BrokerOrderResult(broker_order_id=broker_order_id, status=self._status(str(data.get("status", ""))))
 
     async def get_quote(self, symbol: str) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
-            response = await client.get(
-                f"{self.BASE_URL}/api/v3/ticker/price",
-                params={"symbol": symbol.replace("/", "").upper()},
-            )
+            response = await client.get(f"{self.BASE_URL}/api/v3/ticker/price", params={"symbol": symbol.replace("/", "").upper()})
             response.raise_for_status()
             data = response.json()
             return {"symbol": symbol, "price": Decimal(str(data["price"])), "broker": "binance"}
 
     async def get_positions(self) -> list[dict[str, Any]]:
         async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
-            response = await client.get(
-                f"{self.BASE_URL}/api/v3/account",
-                headers=self._headers(),
-                params=self._signed_params({"recvWindow": 5000}),
-            )
+            response = await client.get(f"{self.BASE_URL}/api/v3/account", headers=self._headers(), params=self._signed_params({"recvWindow": 5000}))
             response.raise_for_status()
             return response.json().get("balances", [])
