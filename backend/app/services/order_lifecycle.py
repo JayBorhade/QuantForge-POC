@@ -1,8 +1,11 @@
 """Canonical order lifecycle and broker-status mapping."""
 
+from decimal import Decimal
+
 from sqlalchemy import select
 from app.models.order import Order, OrderStatus
 from app.services.audit import log_audit
+from app.services.fill_accounting import FillService, FillAccountingError
 
 
 _TERMINAL_STATUSES = {
@@ -91,6 +94,29 @@ class OrderLifecycleService:
         if not locked.broker_order_id:
             raise ValueError("Cannot reconcile an order without a broker order id")
         broker_result = await self.broker.get_order(locked.broker_order_id)
+        previous_filled = locked.filled_quantity
+        broker_filled = broker_result.filled_quantity
+        if broker_filled < previous_filled:
+            raise ValueError("Broker reconciliation attempted to regress cumulative fill quantity")
+        if broker_filled > previous_filled:
+            if broker_result.average_fill_price is None or broker_result.average_fill_price <= 0:
+                raise ValueError("Broker reported additional quantity without a valid average fill price")
+            delta_quantity = broker_filled - previous_filled
+            previous_notional = previous_filled * (locked.average_fill_price or Decimal("0"))
+            cumulative_notional = broker_filled * broker_result.average_fill_price
+            incremental_price = (cumulative_notional - previous_notional) / delta_quantity
+            if incremental_price <= 0:
+                raise ValueError("Broker reported a non-positive incremental fill price")
+            fill_key = f"broker:{locked.broker_order_id}:filled:{broker_filled}"
+            try:
+                await FillService(self.db).apply_fill(
+                    order_id=locked.id,
+                    quantity=delta_quantity,
+                    price=incremental_price,
+                    broker_fill_id=fill_key,
+                )
+            except FillAccountingError as exc:
+                raise ValueError(f"Broker fill accounting failed: {exc}") from exc
         new_status = OrderStatusMapper.from_broker_status(broker_result.status)
         previous_status = locked.status
         if previous_status is OrderStatus.FILLED and new_status is not OrderStatus.FILLED:
