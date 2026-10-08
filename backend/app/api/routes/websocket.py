@@ -46,7 +46,7 @@ def init_websocket_manager():
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: str = ""):
-    # Live/trading updates are user-scoped; never create an anonymous connection.
+    """Authenticated control channel for user updates and market-data subscriptions."""
     if not token:
         await websocket.close(code=4001)
         return
@@ -65,21 +65,73 @@ async def websocket_endpoint(websocket: WebSocket, token: str = ""):
 
     await manager.connect(user_id, websocket)
     init_websocket_manager()
+    market_task = None
+
+    async def stream_market_data(symbols: list[str]):
+        from app.market_data.service import MarketDataService
+
+        service = MarketDataService()
+        async for quote in service.multiplex(symbols):
+            await websocket.send_json(quote.as_dict())
+
     try:
-        await websocket.send_json({"type": "connected", "message": "QuantForge live feed active"})
-        tick = 0
+        await websocket.send_json(
+            {
+                "type": "connected",
+                "message": "QuantForge live feed active",
+                "capabilities": {"market_data": True, "max_symbols": 5},
+            }
+        )
         while True:
+            raw = await websocket.receive_text()
             try:
-                data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
-                msg = json.loads(data) if data else {}
-                if msg.get("type") == "ping":
-                    await websocket.send_json({"type": "pong"})
-            except asyncio.TimeoutError:
-                tick += 1
-                await websocket.send_json({
-                    "type": "heartbeat",
-                    "tick": tick,
-                    "server_time": asyncio.get_event_loop().time(),
-                })
+                msg = json.loads(raw) if raw else {}
+            except json.JSONDecodeError:
+                await websocket.send_json({"type": "error", "code": "invalid_json"})
+                continue
+
+            message_type = msg.get("type")
+            if message_type == "ping":
+                await websocket.send_json({"type": "pong"})
+            elif message_type == "subscribe_market_data":
+                symbols = msg.get("symbols", [])
+                if not isinstance(symbols, list):
+                    await websocket.send_json(
+                        {"type": "error", "code": "symbols_must_be_list"}
+                    )
+                    continue
+                if market_task:
+                    market_task.cancel()
+                    await asyncio.gather(market_task, return_exceptions=True)
+                try:
+                    from app.market_data.service import MarketDataService
+                    normalized = list(
+                        dict.fromkeys(MarketDataService.normalize_symbol(s) for s in symbols)
+                    )
+                    if not normalized or len(normalized) > MarketDataService.MAX_SYMBOLS_PER_CONNECTION:
+                        raise ValueError("Subscribe to 1-5 symbols per connection")
+                    market_task = asyncio.create_task(stream_market_data(normalized))
+                    await websocket.send_json(
+                        {"type": "market_data_subscribed", "symbols": normalized}
+                    )
+                except ValueError as exc:
+                    await websocket.send_json(
+                        {"type": "error", "code": "invalid_subscription", "detail": str(exc)}
+                    )
+            elif message_type == "unsubscribe_market_data":
+                if market_task:
+                    market_task.cancel()
+                    await asyncio.gather(market_task, return_exceptions=True)
+                    market_task = None
+                await websocket.send_json({"type": "market_data_unsubscribed"})
+            else:
+                await websocket.send_json(
+                    {"type": "error", "code": "unsupported_message_type"}
+                )
     except WebSocketDisconnect:
+        pass
+    finally:
+        if market_task:
+            market_task.cancel()
+            await asyncio.gather(market_task, return_exceptions=True)
         manager.disconnect(user_id, websocket)
