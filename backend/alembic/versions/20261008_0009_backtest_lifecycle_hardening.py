@@ -27,11 +27,11 @@ def upgrade():
             SELECT id FROM (
                 SELECT id,
                        ROW_NUMBER() OVER (
-                           PARTITION BY strategy_id, mode, configuration_fingerprint
+                           PARTITION BY identity_key
                            ORDER BY created_at DESC, id DESC
                        ) AS duplicate_rank
                 FROM strategy_runs
-                WHERE configuration_fingerprint IS NOT NULL
+                WHERE identity_key IS NOT NULL
             ) ranked
             WHERE duplicate_rank > 1
         )
