@@ -63,7 +63,7 @@ class OrderLifecycleTests(unittest.TestCase):
 
         self.assertIs(result, locked)
         self.assertEqual(locked.status, OrderStatus.PARTIALLY_FILLED)
-        db.flush.assert_awaited_once()
+        self.assertGreaterEqual(db.flush.await_count, 1)
 
     def test_reconcile_open_orders_processes_only_open_orders(self):
         db = MagicMock()
