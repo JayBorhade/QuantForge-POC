@@ -1,7 +1,7 @@
 """Backtest execution — used by API (sync) and Celery."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Dict
 
@@ -36,7 +36,10 @@ def run_backtest_for_strategy(
             if run.status in {RunStatus.COMPLETED, RunStatus.FAILED, RunStatus.CANCELLED}:
                 return {"run_id": str(run.id), "status": run.status.value, **(run.results or {})}
             if run.status == RunStatus.RUNNING and run.started_at is not None:
-                return {"run_id": str(run.id), "status": run.status.value, "message": "Backtest already running"}
+                age = datetime.now(timezone.utc) - run.started_at
+                if age < timedelta(minutes=30):
+                    return {"run_id": str(run.id), "status": run.status.value, "message": "Backtest already running"}
+                run.error_message = "Previous backtest worker lease expired; execution reclaimed."
         else:
             run = StrategyRun(
                 id=uuid.uuid4(),
