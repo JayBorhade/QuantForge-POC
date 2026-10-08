@@ -1,6 +1,5 @@
 """Tests for automated broker reconciliation tasks."""
 
-import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -32,7 +31,7 @@ class ReconciliationTaskTests(unittest.TestCase):
                      RuntimeError("broker timeout"),
                  ]),
              ) as reconcile:
-            result = asyncio.run(reconcile_broker_orders.run())
+            result = reconcile_broker_orders.run()
 
         self.assertEqual(result["reconciled"], 1)
         self.assertEqual(result["failed"], 1)
@@ -61,7 +60,7 @@ class ReconciliationTaskTests(unittest.TestCase):
         db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: order))
 
         with patch("app.tasks.reconciliation_tasks.AsyncSessionLocal", return_value=self._session(db)):
-            result = asyncio.run(reconcile_broker_order.run(str(uuid4())))
+            result = reconcile_broker_order.run(str(uuid4()))
 
         self.assertEqual(result["status"], "skipped")
         self.assertEqual(result["reason"], "not_live")
