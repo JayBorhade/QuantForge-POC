@@ -303,6 +303,25 @@ async def execute_strategy_signal(
     }
 
 
+@router.post("/runs/{run_id}/cancel")
+async def cancel_backtest_run(run_id: uuid.UUID, current_user: CurrentUser, db: DbSession):
+    """Cooperatively cancel a queued or running backtest."""
+    result = await db.execute(
+        select(StrategyRun)
+        .join(Strategy)
+        .where(StrategyRun.id == run_id, Strategy.user_id == current_user.id)
+    )
+    run = result.scalar_one_or_none()
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
+    if run.status in {RunStatus.COMPLETED, RunStatus.FAILED, RunStatus.CANCELLED}:
+        return {"run_id": str(run.id), "status": run.status.value}
+    run.status = RunStatus.CANCELLED
+    run.completed_at = datetime.now(timezone.utc)
+    await db.flush()
+    return {"run_id": str(run.id), "status": run.status.value}
+
+
 @router.post("/{strategy_id}/stop")
 async def stop_strategy(strategy_id: uuid.UUID, current_user: CurrentUser, db: DbSession):
     strategy = await _get_user_strategy(db, strategy_id, current_user.id)
