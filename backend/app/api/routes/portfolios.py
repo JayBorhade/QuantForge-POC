@@ -15,7 +15,11 @@ from app.models.broker_token import BrokerToken, BrokerType
 from app.models.portfolio import Portfolio, PortfolioStatus
 from app.models.trade import Trade
 from app.services.audit import log_audit
-from app.services.portfolio_valuation import PortfolioValuationError, PortfolioValuationService
+from app.services.portfolio_valuation import (
+    LatestExecutionQuoteProvider,
+    PortfolioValuationError,
+    PortfolioValuationService,
+)
 
 router = APIRouter(prefix="/portfolios", tags=["Portfolios"])
 
@@ -93,51 +97,63 @@ async def portfolio_valuation(
     portfolio_id: uuid.UUID,
     current_user: CurrentUser,
     db: DbSession,
+    source: str = "broker",
     broker: str = "binance",
 ):
-    """Mark all open positions to current broker prices and persist portfolio equity."""
+    """Mark open positions and persist portfolio equity from broker or paper execution prices."""
     portfolio = await _get_portfolio(db, portfolio_id, current_user.id)
-    try:
-        broker_type = BrokerType(broker)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Unsupported broker") from exc
 
-    token_result = await db.execute(
-        select(BrokerToken).where(
-            BrokerToken.user_id == current_user.id,
-            BrokerToken.broker == broker_type,
-            BrokerToken.is_active.is_(True),
-        )
-    )
-    token = token_result.scalar_one_or_none()
-    if token is None:
-        raise HTTPException(status_code=404, detail="Connected broker not found")
+    if source == "paper":
+        try:
+            valuation = await PortfolioValuationService(
+                db,
+                LatestExecutionQuoteProvider(db, portfolio.id),
+            ).value_portfolio(portfolio)
+        except PortfolioValuationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    elif source == "broker":
+        try:
+            broker_type = BrokerType(broker)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Unsupported broker") from exc
 
-    try:
-        credentials = decrypt_credentials(token.api_secret_encrypted)
-        adapter = get_broker_adapter(
-            broker_type.value,
-            credentials["api_key"],
-            credentials["api_secret"],
-            credentials.get("access_token"),
-        )
-
-        if broker_type is not BrokerType.BINANCE:
-            raise HTTPException(
-                status_code=400,
-                detail="Portfolio valuation currently requires a broker with symbol-only quote support; Binance is supported in this endpoint.",
+        token_result = await db.execute(
+            select(BrokerToken).where(
+                BrokerToken.user_id == current_user.id,
+                BrokerToken.broker == broker_type,
+                BrokerToken.is_active.is_(True),
             )
+        )
+        token = token_result.scalar_one_or_none()
+        if token is None:
+            raise HTTPException(status_code=404, detail="Connected broker not found")
 
-        valuation = await PortfolioValuationService(db, adapter).value_portfolio(portfolio)
-    except HTTPException:
-        raise
-    except PortfolioValuationError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Broker valuation request failed: {exc}") from exc
+        try:
+            credentials = decrypt_credentials(token.api_secret_encrypted)
+            adapter = get_broker_adapter(
+                broker_type.value,
+                credentials["api_key"],
+                credentials["api_secret"],
+                credentials.get("access_token"),
+            )
+            if broker_type is not BrokerType.BINANCE:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Portfolio valuation currently requires a broker with symbol-only quote support; Binance is supported in this endpoint.",
+                )
+            valuation = await PortfolioValuationService(db, adapter).value_portfolio(portfolio)
+        except HTTPException:
+            raise
+        except PortfolioValuationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"Broker valuation request failed: {exc}") from exc
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported valuation source")
 
     return {
         "portfolio_id": valuation.portfolio_id,
+        "source": source,
         "cash_balance": float(valuation.cash_balance),
         "position_market_value": float(valuation.position_market_value),
         "equity": float(valuation.equity),
