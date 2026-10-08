@@ -23,7 +23,7 @@ class BacktestLifecycleHardeningTests(unittest.TestCase):
 
     def test_database_enforces_backtest_identity(self):
         migration = next(ROOT.glob("alembic/versions/*_backtest_lifecycle_hardening.py")).read_text(encoding="utf-8")
-        self.assertIn("uq_strategy_runs_backtest_identity", migration)
+        self.assertIn("ix_strategy_runs_identity_key", migration)
         self.assertIn("unique=True", migration)
         self.assertIn("configuration_fingerprint", migration)
         self.assertIn("identity_key", migration)
