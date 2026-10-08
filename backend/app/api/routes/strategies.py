@@ -161,6 +161,7 @@ async def get_backtest_run(run_id: uuid.UUID, current_user: CurrentUser, db: DbS
         "trade_history": results.get("trade_history"),
         "error_message": run.error_message,
         "analytics": results.get("analytics", {}),
+        "performance_report": results.get("performance_report", {}),
         "configuration_fingerprint": run.configuration_fingerprint,
         "data_source": run.data_source,
         "data_revision": run.data_revision,
