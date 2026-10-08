@@ -7,7 +7,8 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
-from app.models.portfolio import Portfolio, PortfolioStatus\nfrom app.models.strategy import RunMode, RunStatus, Strategy, StrategyRun, StrategyStatus
+from app.models.portfolio import Portfolio, PortfolioStatus
+from app.models.strategy import RunMode, RunStatus, Strategy, StrategyRun, StrategyStatus
 from app.schemas.strategy import (
     BacktestRequest,
     BacktestResponse,
