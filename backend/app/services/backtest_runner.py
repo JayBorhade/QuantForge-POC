@@ -7,6 +7,7 @@ from typing import Any, Dict
 
 from app.db.sync_session import get_sync_db
 from app.models.strategy import RunMode, RunStatus, Strategy, StrategyRun
+from app.backtesting.fingerprint import configuration_fingerprint
 
 
 def run_backtest_for_strategy(
@@ -43,6 +44,17 @@ def run_backtest_for_strategy(
         db.flush()
 
         try:
+            run.configuration_fingerprint = configuration_fingerprint(
+                strategy_type=strategy.strategy_type.value,
+                symbol=strategy.symbol,
+                parameters=strategy.parameters or {},
+                config={"initial_capital": initial_capital},
+                start_date=start_date.isoformat(),
+                end_date=end_date.isoformat(),
+            )
+            run.data_source = "yfinance"
+            run.data_revision = "provider-runtime"
+            db.flush()
             engine = BacktestEngine()
             result = engine.run(
                 strategy_id=str(strategy.id),
