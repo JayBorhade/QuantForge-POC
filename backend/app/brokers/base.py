@@ -1,15 +1,14 @@
 """Provider-neutral broker contract.
 
-Concrete broker integrations must implement this interface. Broker adapters MUST treat
-`client_order_id` as an idempotency key so recovery can safely retry an uncertain
-submission without creating duplicate orders. The execution
-layer never imports provider SDKs directly, which keeps paper trading and
-live trading boundaries explicit and testable.
+Concrete adapters must never blindly retry an uncertain submission. If a provider supports
+client-side idempotency, adapters must forward client_order_id to that provider.
+Otherwise the execution/reconciliation layer must treat submission timeouts as uncertain
+and reconcile rather than resubmit.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Protocol
+from typing import Mapping, Protocol
 
 from app.models.order import OrderSide, OrderType
 
@@ -22,6 +21,7 @@ class BrokerOrderRequest:
     order_type: OrderType
     quantity: Decimal
     limit_price: Decimal | None = None
+    broker_params: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
