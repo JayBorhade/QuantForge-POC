@@ -392,8 +392,12 @@ async def cancel_backtest_run(run_id: uuid.UUID, current_user: CurrentUser, db: 
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
     if run.status in {RunStatus.COMPLETED, RunStatus.FAILED, RunStatus.CANCELLED}:
         return {"run_id": str(run.id), "status": run.status.value}
+    # Invalidate the active worker lease before cancellation is committed.
+    # A stale worker must not be able to publish COMPLETED/FAILED afterwards.
     run.status = RunStatus.CANCELLED
     run.identity_key = None
+    run.worker_token = None
+    run.worker_started_at = None
     run.completed_at = datetime.now(timezone.utc)
     await db.flush()
     return {"run_id": str(run.id), "status": run.status.value}
