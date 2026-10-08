@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app.celery_app import celery_app
 from app.db.session import AsyncSessionLocal
-from app.models.portfolio import Portfolio
+from app.models.portfolio import Portfolio, PortfolioStatus
 from app.services.portfolio_history import PortfolioHistoryService
 from app.services.portfolio_valuation import LatestExecutionQuoteProvider, PortfolioValuationService
 
@@ -19,7 +19,7 @@ def record_portfolio_snapshots(self):
     async def _run():
         async with AsyncSessionLocal() as db:
             result = await db.execute(
-                select(Portfolio).where(Portfolio.status == "active").order_by(Portfolio.created_at)
+                select(Portfolio).where(Portfolio.status == PortfolioStatus.ACTIVE).order_by(Portfolio.created_at)
             )
             portfolios = list(result.scalars().all())
             summary = {"recorded": 0, "skipped": 0, "failed": 0}
