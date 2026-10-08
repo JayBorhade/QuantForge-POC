@@ -133,7 +133,11 @@ class OrderLifecycleTests(unittest.TestCase):
             "broker-1", "filled", filled_quantity=Decimal("4"), average_fill_price=Decimal("105")
         ))
         fill = MagicMock()
-        with patch("app.services.order_lifecycle.FillService.apply_fill", new=AsyncMock(return_value=fill)) as apply:
+        async def apply_fill(**kwargs):
+            locked.filled_quantity += kwargs["quantity"]
+            locked.average_fill_price = Decimal("105")
+            return fill
+        with patch("app.services.order_lifecycle.FillService.apply_fill", new=AsyncMock(side_effect=apply_fill)) as apply:
             result = asyncio.run(OrderLifecycleService(db, broker).reconcile(locked))
 
         self.assertIs(result, locked)
