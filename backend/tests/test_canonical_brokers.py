@@ -106,6 +106,20 @@ class CanonicalBrokerTests(unittest.TestCase):
         self.assertEqual(params["newClientOrderId"], "client-123")
         self.assertIn("signature", params)
 
+    def test_binance_reconciles_cumulative_commission(self):
+        broker = BinanceBrokerAdapter("key", "secret")
+        response = FakeResponse(
+            200,
+            [
+                {"commission": "0.10", "commissionAsset": "USDT"},
+                {"commission": "0.15", "commissionAsset": "USDT"},
+            ],
+        )
+        client = FakeClient(response)
+        with patch("app.brokers.binance.httpx.AsyncClient", return_value=client):
+            result = asyncio.run(broker._get_cumulative_fee("BTCUSDT", "42"))
+        self.assertEqual(result, (Decimal("0.25"), "USDT"))
+
     def test_binance_order_id_round_trips_for_cancel(self):
         broker = BinanceBrokerAdapter("key", "secret")
         response = FakeResponse(200, {"orderId": 42, "status": "CANCELED"})
