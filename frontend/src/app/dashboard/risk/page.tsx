@@ -39,6 +39,7 @@ type Limits = {
 };
 
 const emptyLimits: Limits = { kill_switch: false };
+type NumericLimitKey = Exclude<keyof Limits, "kill_switch">;
 
 const pct = (value?: number | null) =>
   value == null ? "—" : `${(value * 100).toFixed(1)}%`;
@@ -77,7 +78,7 @@ export default function RiskPage() {
     });
   }, [portfolioId]);
 
-  const update = (key: keyof Limits, value: string) => {
+  const update = (key: NumericLimitKey, value: string) => {
     setLimits((current) => ({ ...current, [key]: value === "" ? null : Number(value) }));
   };
 
@@ -175,7 +176,7 @@ export default function RiskPage() {
               ["max_symbol_exposure", "Max symbol exposure"],
               ["max_strategy_exposure", "Max strategy exposure"],
               ["max_strategy_allocation_pct", "Max strategy allocation (0–1)"],
-            ] as [keyof Limits, string][]).map(([key, label]) => (
+            ] as [NumericLimitKey, string][]).map(([key, label]) => (
               <label key={key} className="text-sm">
                 <span className="mb-1 block text-muted-foreground">{label}</span>
                 <Input
