@@ -7,6 +7,13 @@ from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+_LOCAL_ENVS = {"development", "local", "test"}
+_DEFAULT_SECRET_PREFIXES = (
+    "dev-secret-key-",
+    "dev-jwt-secret-key-",
+)
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -50,10 +57,9 @@ class Settings(BaseSettings):
     smtp_from: str = "noreply@quantforge.io"
 
     rate_limit_per_minute: int = 60
-
     cors_origins: List[str] = ["http://localhost:3000"]
 
-    # Encryption (defaults to SECRET_KEY if ENCRYPTION_KEY unset)
+    # Encryption (required outside local/test environments)
     encryption_key: str = ""
 
     # CSRF
@@ -66,18 +72,29 @@ class Settings(BaseSettings):
     stripe_price_pro: str = ""
 
     @model_validator(mode="after")
-    def validate_production_security(self):
-        if self.app_env == "production":
-            if self.secret_key.startswith("dev-secret-key-"):
-                raise ValueError("SECRET_KEY must be explicitly configured in production")
-            if self.jwt_secret_key.startswith("dev-jwt-secret-key-"):
-                raise ValueError("JWT_SECRET_KEY must be explicitly configured in production")
-            if not self.cookie_secure:
-                raise ValueError("COOKIE_SECURE must be true in production")
-            if self.cookie_samesite not in {"lax", "strict", "none"}:
-                raise ValueError("COOKIE_SAMESITE must be lax, strict, or none")
-            if not self.cors_origins:
-                raise ValueError("CORS_ORIGINS must contain at least one trusted origin")
+    def validate_environment_security(self):
+        environment = self.app_env.strip().lower()
+        if environment in _LOCAL_ENVS:
+            return self
+
+        if self.debug:
+            raise ValueError("DEBUG must be false outside local/test environments")
+        if any(self.secret_key.startswith(prefix) for prefix in _DEFAULT_SECRET_PREFIXES):
+            raise ValueError("SECRET_KEY must be explicitly configured outside local/test environments")
+        if self.jwt_secret_key.startswith("dev-jwt-secret-key-"):
+            raise ValueError("JWT_SECRET_KEY must be explicitly configured outside local/test environments")
+        if self.database_url == "postgresql+asyncpg://quantforge:quantforge_secret@localhost:5432/quantforge":
+            raise ValueError("DATABASE_URL must be explicitly configured outside local/test environments")
+        if not self.encryption_key:
+            raise ValueError("ENCRYPTION_KEY must be explicitly configured outside local/test environments")
+        if not self.cookie_secure:
+            raise ValueError("COOKIE_SECURE must be true outside local/test environments")
+        if self.cookie_samesite not in {"lax", "strict", "none"}:
+            raise ValueError("COOKIE_SAMESITE must be lax, strict, or none")
+        if not self.cors_origins:
+            raise ValueError("CORS_ORIGINS must contain at least one trusted origin")
+        if self.csrf_enabled is not True:
+            raise ValueError("CSRF_ENABLED must remain true outside local/test environments")
         return self
 
     @property
@@ -86,7 +103,7 @@ class Settings(BaseSettings):
 
     @property
     def is_production(self) -> bool:
-        return self.app_env == "production"
+        return self.app_env.strip().lower() == "production"
 
 
 @lru_cache
