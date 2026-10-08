@@ -72,6 +72,28 @@ class CanonicalBrokerTests(unittest.TestCase):
         self.assertEqual(payload["transaction_type"], "BUY")
         self.assertEqual(payload["product"], "CNC")
 
+    def test_zerodha_reconciles_cumulative_fill(self):
+        broker = ZerodhaBrokerAdapter("key", "secret", "token")
+        response = FakeResponse(
+            200,
+            {
+                "status": "success",
+                "data": [
+                    {
+                        "status": "COMPLETE",
+                        "filled_quantity": 2,
+                        "average_price": 2510,
+                    }
+                ],
+            },
+        )
+        client = FakeClient(response)
+        with patch("app.brokers.zerodha.httpx.AsyncClient", return_value=client):
+            result = asyncio.run(broker.get_order("kite-1"))
+        self.assertEqual(result.status, "filled")
+        self.assertEqual(result.filled_quantity, Decimal("2"))
+        self.assertEqual(result.average_fill_price, Decimal("2510"))
+
     def test_binance_preserves_symbol_in_broker_order_id(self):
         broker = BinanceBrokerAdapter("key", "secret")
         response = FakeResponse(200, {"orderId": 42, "status": "NEW"})
@@ -93,6 +115,26 @@ class CanonicalBrokerTests(unittest.TestCase):
         params = client.delete.call_args.kwargs["params"]
         self.assertEqual(params["symbol"], "BTCUSDT")
         self.assertEqual(params["orderId"], "42")
+
+    def test_angel_one_reconciles_cumulative_fill(self):
+        broker = AngelOneBrokerAdapter("key", "secret", "token")
+        response = FakeResponse(
+            200,
+            {
+                "status": True,
+                "data": {
+                    "orderstatus": "complete",
+                    "filledshares": "3",
+                    "averageprice": "2512.50",
+                },
+            },
+        )
+        client = FakeClient(response)
+        with patch("app.brokers.angel_one.httpx.AsyncClient", return_value=client):
+            result = asyncio.run(broker.get_order("angel-1"))
+        self.assertEqual(result.status, "filled")
+        self.assertEqual(result.filled_quantity, Decimal("3"))
+        self.assertEqual(result.average_fill_price, Decimal("2512.50"))
 
     def test_angel_one_requires_instrument_metadata(self):
         broker = AngelOneBrokerAdapter("key", "secret", "token")

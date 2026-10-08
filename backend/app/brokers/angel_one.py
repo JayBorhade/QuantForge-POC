@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
 import httpx
@@ -118,9 +119,25 @@ class AngelOneBrokerAdapter:
             if data.get("status") is not True:
                 raise RuntimeError(data.get("message") or "Angel One order lookup failed")
             details = data.get("data") or {}
+            filled_quantity_raw = next(
+                (details.get(key) for key in ("filledshares", "filledquantity", "filled_quantity") if details.get(key) not in (None, "")),
+                "0",
+            )
+            filled_quantity = Decimal(str(filled_quantity_raw))
+            average_fill_price_raw = next(
+                (details.get(key) for key in ("averageprice", "average_price") if details.get(key) not in (None, "")),
+                None,
+            )
+            average_fill_price = (
+                Decimal(str(average_fill_price_raw))
+                if average_fill_price_raw not in (None, "", 0, "0")
+                else None
+            )
             return BrokerOrderResult(
                 broker_order_id=broker_order_id,
                 status=self._status(str(details.get("orderstatus", details.get("status", "")))),
+                filled_quantity=filled_quantity,
+                average_fill_price=average_fill_price,
             )
 
     async def get_quote(self, symbol: str, exchange: str, symboltoken: str) -> dict[str, Any]:

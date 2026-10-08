@@ -110,9 +110,18 @@ class ZerodhaBrokerAdapter:
             if data.get("status") != "success" or not data.get("data"):
                 raise RuntimeError(data.get("message") or "Zerodha order lookup failed")
             latest: Mapping[str, Any] = data["data"][-1]
+            filled_quantity = Decimal(str(latest.get("filled_quantity", "0")))
+            average_fill_price_raw = latest.get("average_price")
+            average_fill_price = (
+                Decimal(str(average_fill_price_raw))
+                if average_fill_price_raw not in (None, "", 0, "0")
+                else None
+            )
             return BrokerOrderResult(
                 broker_order_id=broker_order_id,
                 status=self._status(str(latest.get("status", ""))),
+                filled_quantity=filled_quantity,
+                average_fill_price=average_fill_price,
             )
 
     async def get_quote(self, symbol: str, exchange: str = "NSE") -> dict[str, Any]:
