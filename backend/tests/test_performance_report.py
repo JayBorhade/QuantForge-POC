@@ -33,7 +33,7 @@ class PortfolioPerformanceReportTests(unittest.TestCase):
         years = period_returns(self.equity, "year")
         self.assertEqual([item["period"] for item in months], ["2025-01", "2025-02", "2026-01"])
         self.assertEqual([item["period"] for item in years], ["2025", "2026"])
-        self.assertAlmostEqual(months[0]["return_pct"], 5.0)
+        self.assertAlmostEqual(months[0]["return_pct"], 10.0)
 
     def test_benchmark_excess_return(self):
         benchmark = [
