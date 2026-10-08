@@ -106,6 +106,9 @@ class StrategyRun(Base):
     total_trades: Mapped[int] = mapped_column(default=0)
     results: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    configuration_fingerprint: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    data_source: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    data_revision: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
