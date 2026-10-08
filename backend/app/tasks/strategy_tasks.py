@@ -69,3 +69,48 @@ def run_backtest_task(
         initial_capital=initial_capital,
         run_id=run_id,
     )
+
+
+@celery_app.task(bind=True, max_retries=0)
+def execute_strategy_signal_task(self, strategy_id: str, portfolio_id: str):
+    """Evaluate and execute the latest paper strategy signal for a portfolio."""
+    async def _execute():
+        from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
+
+        from app.db.session import AsyncSessionLocal
+        from app.models.portfolio import Portfolio
+        from app.models.strategy import Strategy
+        from app.services.strategy_execution import StrategyExecutionService
+        from strategies.engine import StrategyEngine
+
+        async with AsyncSessionLocal() as db:
+            strategy = await db.get(Strategy, uuid.UUID(strategy_id))
+            if strategy is None:
+                raise ValueError("Strategy not found")
+
+            result = await db.execute(
+                select(Portfolio)
+                .options(selectinload(Portfolio.positions))
+                .where(Portfolio.id == uuid.UUID(portfolio_id), Portfolio.user_id == strategy.user_id)
+            )
+            portfolio = result.scalar_one_or_none()
+            if portfolio is None:
+                raise ValueError("Portfolio not found for strategy owner")
+
+            engine = StrategyEngine()
+            data = engine.fetch_data(strategy.symbol)
+            result = await StrategyExecutionService().execute_latest_signal(
+                db=db,
+                strategy=strategy,
+                portfolio=portfolio,
+                data=data,
+            )
+            await db.commit()
+            return result
+
+    try:
+        return _run_async(_execute())
+    except Exception:
+        logger.exception("Strategy signal execution failed for strategy %s", strategy_id)
+        raise
