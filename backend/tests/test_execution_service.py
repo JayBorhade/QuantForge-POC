@@ -62,6 +62,31 @@ class ExecutionValidationTests(unittest.TestCase):
         self.assertNotEqual(created_order.status, OrderStatus.FAILED)
         broker.submit_order.assert_awaited_once()
 
+    def test_live_requires_verified_two_factor_owner(self):
+        db = AsyncMock()
+        duplicate = MagicMock()
+        duplicate.scalar_one_or_none.return_value = None
+        owner_result = MagicMock()
+        owner_result.scalar_one_or_none.return_value = type(
+            "U", (), {"is_verified": False, "two_factor_enabled": False}
+        )()
+        db.execute.side_effect = [duplicate, owner_result]
+        broker = AsyncMock()
+        service = ExecutionService(db, broker)
+        portfolio = type("P", (), {"id": "portfolio", "user_id": "user"})()
+
+        with self.assertRaisesRegex(ValueError, "verified account"):
+            asyncio.run(service.submit(
+                portfolio=portfolio,
+                symbol="NIFTY",
+                side=OrderSide.BUY,
+                quantity=Decimal("1"),
+                mode=ExecutionMode.LIVE,
+                client_order_id="test-unverified",
+            ))
+
+        broker.submit_order.assert_not_awaited()
 
 if __name__ == "__main__":
+
     unittest.main()
