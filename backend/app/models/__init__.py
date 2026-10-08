@@ -5,6 +5,7 @@ from app.models.broker_token import BrokerToken
 from app.models.deployment import Deployment
 from app.models.notification import Notification
 from app.models.portfolio import Portfolio
+from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.session import UserSession
 from app.models.strategy import Strategy, StrategyRun
 from app.models.subscription import Subscription
@@ -15,6 +16,7 @@ __all__ = [
     "User",
     "UserSession",
     "Portfolio",
+    "PortfolioSnapshot",
     "Trade",
     "Strategy",
     "StrategyRun",

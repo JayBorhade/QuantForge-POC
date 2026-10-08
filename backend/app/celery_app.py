@@ -12,7 +12,7 @@ celery_app = Celery(
     "quantforge",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
-    include=["app.tasks.strategy_tasks", "app.tasks.notification_tasks", "app.tasks.reconciliation_tasks"],
+    include=["app.tasks.strategy_tasks", "app.tasks.notification_tasks", "app.tasks.reconciliation_tasks", "app.tasks.portfolio_tasks"],
 )
 
 celery_app.conf.update(
@@ -27,6 +27,11 @@ celery_app.conf.update(
     task_default_retry_delay=30,
     result_expires=86400,
     beat_schedule={
+        "record-portfolio-snapshots": {
+            "task": "app.tasks.portfolio_tasks.record_portfolio_snapshots",
+            "schedule": 300.0,
+            "options": {"expires": 295},
+        },
         "reconcile-open-broker-orders": {
             "task": "app.tasks.reconciliation_tasks.reconcile_broker_orders",
             "schedule": 30.0,
