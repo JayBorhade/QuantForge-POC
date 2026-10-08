@@ -5,7 +5,7 @@ from typing import Mapping
 from uuid import UUID
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.order import ExecutionMode, Order, OrderSide, OrderStatus, OrderType
@@ -62,6 +62,13 @@ class ExecutionService:
             return duplicate
 
         normalized_symbol = symbol.strip().upper()
+        # Serialize order admission per portfolio for the duration of the
+        # transaction. This prevents concurrent requests from both passing
+        # risk checks against the same stale exposure snapshot.
+        await self.db.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:portfolio_id))"),
+            {"portfolio_id": str(portfolio.id)},
+        )
         risk_price = estimated_price if estimated_price is not None else limit_price
         try:
             await RiskService(self.db).require_approval(
