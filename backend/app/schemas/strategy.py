@@ -4,9 +4,10 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.models.strategy import RunMode, StrategyStatus, StrategyType
+from app.services.strategy_scheduler import validate_cron_expression
 
 
 class StrategyCreate(BaseModel):
@@ -38,6 +39,8 @@ class StrategyResponse(BaseModel):
     parameters: Dict[str, Any]
     is_paper: bool
     schedule_cron: Optional[str]
+    schedule_portfolio_id: Optional[UUID]
+    last_scheduled_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
 

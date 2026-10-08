@@ -66,6 +66,12 @@ class Strategy(Base):
     )
     parameters: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict)
     schedule_cron: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    schedule_portfolio_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("portfolios.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    last_scheduled_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
     is_paper: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

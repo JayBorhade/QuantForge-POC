@@ -24,6 +24,15 @@ celery_app.conf.update(
     task_track_started=True,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
+    task_default_retry_delay=30,
+    result_expires=86400,
+    beat_schedule={
+        "dispatch-due-strategy-schedules": {
+            "task": "app.tasks.strategy_tasks.dispatch_scheduled_strategy_tasks",
+            "schedule": 60.0,
+            "options": {"expires": 55},
+        },
+    },
 )
 
 if os.getenv("CELERY_ALWAYS_EAGER", "").lower() in ("1", "true", "yes"):

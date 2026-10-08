@@ -114,3 +114,15 @@ def execute_strategy_signal_task(self, strategy_id: str, portfolio_id: str):
     except Exception:
         logger.exception("Strategy signal execution failed for strategy %s", strategy_id)
         raise
+
+
+@celery_app.task(bind=True, max_retries=0, ignore_result=False)
+def dispatch_scheduled_strategy_tasks(self):
+    """Dispatch due paper strategy schedules; the next beat tick handles recovery."""
+    from app.services.strategy_scheduler import dispatch_due_strategies
+
+    try:
+        return dispatch_due_strategies()
+    except Exception:
+        logger.exception("Scheduled strategy dispatcher failed")
+        raise
