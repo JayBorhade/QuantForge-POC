@@ -22,6 +22,10 @@ class RiskLimit(Base):
     max_position_quantity: Mapped[Decimal | None] = mapped_column(Numeric(18, 8), nullable=True)
     max_daily_loss: Mapped[Decimal | None] = mapped_column(Numeric(18, 8), nullable=True)
     max_open_orders: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_gross_exposure: Mapped[Decimal | None] = mapped_column(Numeric(18, 8), nullable=True)
+    max_symbol_exposure: Mapped[Decimal | None] = mapped_column(Numeric(18, 8), nullable=True)
+    max_strategy_exposure: Mapped[Decimal | None] = mapped_column(Numeric(18, 8), nullable=True)
+    max_strategy_allocation_pct: Mapped[Decimal | None] = mapped_column(Numeric(8, 6), nullable=True)
     kill_switch: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc),
