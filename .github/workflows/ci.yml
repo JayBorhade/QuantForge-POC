@@ -57,6 +57,7 @@ jobs:
         run: alembic upgrade head
       - name: Validate production Compose and operational scripts
         run: |
+          cp .env.example .env
           docker compose -f docker-compose.production.yml config
           bash -n scripts/backup-postgres.sh
 
