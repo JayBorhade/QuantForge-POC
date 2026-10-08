@@ -177,6 +177,66 @@ async def portfolio_valuation(
     }
 
 
+@router.get("/{portfolio_id}/history")
+async def portfolio_history(
+    portfolio_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: DbSession,
+    days: int = 30,
+    limit: int = 500,
+):
+    """Return chronological equity/P&L snapshots for charting and audit."""
+    if days < 1 or days > 3650:
+        raise HTTPException(status_code=400, detail="days must be between 1 and 3650")
+    if limit < 1 or limit > 5000:
+        raise HTTPException(status_code=400, detail="limit must be between 1 and 5000")
+    portfolio = await _get_portfolio(db, portfolio_id, current_user.id)
+    from datetime import datetime, timedelta, timezone
+    from app.services.portfolio_history import PortfolioHistoryService
+    snapshots = await PortfolioHistoryService(db).history(
+        portfolio.id,
+        start=datetime.now(timezone.utc) - timedelta(days=days),
+        limit=limit,
+    )
+    return {
+        "portfolio_id": str(portfolio.id),
+        "days": days,
+        "snapshots": [
+            {
+                "timestamp": item.recorded_at.isoformat(),
+                "equity": float(item.equity),
+                "cash_balance": float(item.cash_balance),
+                "position_market_value": float(item.position_market_value),
+                "realized_pnl": float(item.realized_pnl),
+                "unrealized_pnl": float(item.unrealized_pnl),
+                "total_pnl": float(item.total_pnl),
+                "return": float(item.daily_return),
+                "drawdown": float(item.drawdown),
+            }
+            for item in snapshots
+        ],
+    }
+
+
+@router.get("/{portfolio_id}/performance")
+async def portfolio_performance(
+    portfolio_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: DbSession,
+    days: int = 30,
+):
+    """Return historical return, drawdown and volatility metrics."""
+    if days < 1 or days > 3650:
+        raise HTTPException(status_code=400, detail="days must be between 1 and 3650")
+    portfolio = await _get_portfolio(db, portfolio_id, current_user.id)
+    from app.services.portfolio_history import PortfolioHistoryService
+    metrics = await PortfolioHistoryService(db).metrics(portfolio.id, days=days)
+    return {
+        "portfolio_id": str(portfolio.id),
+        **{key: float(value) if isinstance(value, Decimal) else value for key, value in metrics.items()},
+    }
+
+
 @router.get("/{portfolio_id}/analytics")
 async def portfolio_analytics(portfolio_id: uuid.UUID, current_user: CurrentUser, db: DbSession):
     portfolio = await _get_portfolio(db, portfolio_id, current_user.id)
