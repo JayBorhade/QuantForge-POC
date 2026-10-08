@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.cash_ledger import CashLedgerService
+from app.services.trade_ledger import TradeLedgerService
 from app.models.execution_fill import ExecutionFill
 from app.models.order import ExecutionMode, Order, OrderSide, OrderStatus
 from app.models.portfolio import Portfolio
@@ -154,7 +155,6 @@ class FillService:
         )
         await self.db.flush()
 
-        from app.services.trade_ledger import TradeLedgerService
         await TradeLedgerService(self.db).record_fill(
             order=order,
             quantity=quantity,
