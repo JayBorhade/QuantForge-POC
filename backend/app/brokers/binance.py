@@ -87,13 +87,18 @@ class BinanceBrokerAdapter:
             data = response.json()
             if response.status_code >= 400 or "orderId" not in data:
                 raise RuntimeError(data.get("msg") or f"Binance order failed ({response.status_code})")
-            return BrokerOrderResult(str(data["orderId"]), self._status(str(data.get("status", "NEW"))))
+            return BrokerOrderResult(f"binance:{symbol}:{data["orderId"]}", self._status(str(data.get("status", "NEW"))))
+
+    @staticmethod
+    def _parse_order_id(broker_order_id: str) -> tuple[str, str]:
+        parts = broker_order_id.split(":", 2)
+        if len(parts) != 3 or parts[0] != "binance":
+            raise ValueError("Invalid Binance broker order id")
+        return parts[1], parts[2]
 
     async def cancel_order(self, broker_order_id: str) -> None:
-        symbol = self._symbol_for_order(broker_order_id)
-        if not symbol:
-            raise ValueError("Binance cancellation requires broker_params.symbol; use cancel_order_for_symbol")
-        await self.cancel_order_for_symbol(symbol, broker_order_id)
+        symbol, order_id = self._parse_order_id(broker_order_id)
+        await self.cancel_order_for_symbol(symbol, order_id)
 
     async def cancel_order_for_symbol(self, symbol: str, broker_order_id: str) -> None:
         params = self._signed_params({"symbol": symbol.replace("/", "").upper(), "orderId": broker_order_id})
@@ -108,13 +113,9 @@ class BinanceBrokerAdapter:
             if "orderId" not in data:
                 raise RuntimeError(data.get("msg") or "Binance cancellation failed")
 
-    def _symbol_for_order(self, broker_order_id: str) -> str | None:
-        return None
-
     async def get_order(self, broker_order_id: str) -> BrokerOrderResult:
-        raise ValueError(
-            "Binance order lookup requires the symbol; use get_order_for_symbol from reconciliation context"
-        )
+        symbol, order_id = self._parse_order_id(broker_order_id)
+        return await self.get_order_for_symbol(symbol, order_id)
 
     async def get_order_for_symbol(self, symbol: str, broker_order_id: str) -> BrokerOrderResult:
         params = self._signed_params({"symbol": symbol.replace("/", "").upper(), "orderId": broker_order_id})
