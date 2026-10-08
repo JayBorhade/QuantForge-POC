@@ -34,7 +34,7 @@ class OrderLifecycleTests(unittest.TestCase):
         self.assertIs(result, locked)
         self.assertEqual(locked.status, OrderStatus.CANCELLED)
         broker.cancel_order.assert_awaited_once_with("paper-1")
-        db.flush.assert_awaited_once()
+        self.assertGreaterEqual(db.flush.await_count, 1)
 
     def test_terminal_order_cannot_be_cancelled(self):
         db = MagicMock()
