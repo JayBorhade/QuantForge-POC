@@ -4,7 +4,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 function getCsrfToken(): string | null {
   if (typeof document === "undefined") return null;
-  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+  const match = document.cookie.match(/(?:^|;\\s*)csrf_token=([^;]+)/);
   return match ? decodeURIComponent(match[1]) : null;
 }
 
@@ -28,8 +28,10 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const original = error.config;
-    if (error.response?.status === 401 && !original._retry) {
+    // Network errors can have no response and no request config. Never dereference
+    // config until it is known to exist; preserve the original error in that case.
+    const original = error?.config;
+    if (error?.response?.status === 401 && original && !original._retry) {
       original._retry = true;
       try {
         await api.post("/auth/refresh");
