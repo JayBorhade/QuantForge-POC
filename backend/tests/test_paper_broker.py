@@ -54,3 +54,17 @@ class PaperBrokerTests(unittest.TestCase):
                     )
                 )
             )
+
+    def test_non_finite_quantity_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "finite and positive"):
+            asyncio.run(
+                PaperBrokerAdapter().submit_order(
+                    BrokerOrderRequest(
+                        client_order_id="bad-nan",
+                        symbol="RELIANCE",
+                        side=OrderSide.BUY,
+                        order_type=OrderType.MARKET,
+                        quantity=Decimal("NaN"),
+                    )
+                )
+            )
