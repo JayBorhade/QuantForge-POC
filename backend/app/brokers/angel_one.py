@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import hashlib
 from typing import Any
 
 import httpx
@@ -64,6 +65,9 @@ class AngelOneBrokerAdapter:
         if missing:
             raise ValueError(f"Angel One order missing broker_params: {', '.join(missing)}")
 
+        # Angel One exposes ordertag in its order book; derive a deterministic
+        # compact tag from the client id so uncertain submissions can be found.
+        client_tag = "qf" + hashlib.sha256(request.client_order_id.encode()).hexdigest()[:17]
         payload: dict[str, Any] = {
             "variety": request.broker_params.get("variety", "NORMAL"),
             "tradingsymbol": request.symbol,
@@ -77,6 +81,7 @@ class AngelOneBrokerAdapter:
             "price": str(request.limit_price or 0),
             "squareoff": "0",
             "stoploss": "0",
+            "ordertag": client_tag,
         }
         if request.order_type is OrderType.LIMIT and request.limit_price is None:
             raise ValueError("Angel One LIMIT order requires limit_price")
@@ -100,6 +105,43 @@ class AngelOneBrokerAdapter:
             if not order_id:
                 raise BrokerSubmissionUnknown("Angel One may have accepted the order without returning an order id")
             return BrokerOrderResult(str(order_id), "submitted")
+
+    @staticmethod
+    def _client_tag(client_order_id: str) -> str:
+        return "qf" + hashlib.sha256(client_order_id.encode()).hexdigest()[:17]
+
+    async def find_order_by_client_order_id(
+        self, client_order_id: str, symbol: str
+    ) -> BrokerOrderResult | None:
+        async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
+            response = await client.get(
+                f"{self.BASE_URL}/rest/secure/angelbroking/order/v1/getOrderBook",
+                headers=self._headers(),
+            )
+            if response.status_code >= 500:
+                raise BrokerSubmissionUnknown(
+                    f"Angel One order-book lookup returned HTTP {response.status_code}"
+                )
+            response.raise_for_status()
+            data = response.json()
+        if data.get("status") is not True:
+            raise RuntimeError("Angel One order-book lookup failed")
+        expected_tag = self._client_tag(client_order_id)
+        for item in data.get("data") or []:
+            tag = item.get("ordertag") or item.get("orderTag")
+            if tag != expected_tag:
+                continue
+            if str(item.get("tradingsymbol", "")).upper() != symbol.upper():
+                continue
+            filled = Decimal(str(item.get("filledshares", "0")))
+            average = Decimal(str(item.get("averageprice", "0")))
+            return BrokerOrderResult(
+                broker_order_id=str(item.get("orderid") or item.get("uniqueorderid")),
+                status=self._status(str(item.get("orderstatus") or item.get("status", "open"))),
+                filled_quantity=filled,
+                average_fill_price=average if average > 0 else None,
+            )
+        return None
 
     async def cancel_order(self, broker_order_id: str) -> None:
         payload = {"variety": "NORMAL", "orderid": broker_order_id}
