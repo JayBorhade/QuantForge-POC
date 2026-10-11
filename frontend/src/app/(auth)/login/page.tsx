@@ -17,7 +17,14 @@ export default function LoginPage() {
   const [remember, setRemember] = useState(false);
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
-  const [needs2fa, setNeeds2fa] = useState(false);\n  const [registeredMessage, setRegisteredMessage] = useState("");\n\n  useEffect(() => {\n    if (new URLSearchParams(window.location.search).get("registered") === "1") {\n      setRegisteredMessage("Account created. Sign in to continue.");\n    }\n  }, []);
+  const [needs2fa, setNeeds2fa] = useState(false);
+  const [registeredMessage, setRegisteredMessage] = useState("");
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("registered") === "1") {
+      setRegisteredMessage("Account created. Sign in to continue.");
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +48,8 @@ export default function LoginPage() {
         <div className="mb-8 flex flex-col items-center">
           <Activity className="h-10 w-10 text-primary mb-2" />
           <h1 className="text-2xl font-bold">Welcome back</h1>
-          <p className="text-sm text-muted-foreground">Sign in to QuantForge</p>\n          {registeredMessage && <p className="mt-3 text-sm text-emerald-500" role="status" aria-live="polite">{registeredMessage}</p>}
+          <p className="text-sm text-muted-foreground">Sign in to QuantForge</p>
+          {registeredMessage && <p className="mt-3 text-sm text-emerald-500" role="status" aria-live="polite">{registeredMessage}</p>}
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
