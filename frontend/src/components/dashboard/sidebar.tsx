@@ -37,7 +37,9 @@ const links = [
 export function DashboardSidebar() {
   const pathname = usePathname();
   const { logout, user } = useAuthStore();
-  const [mobileOpen, setMobileOpen] = useState(false);\n  const menuButtonRef = useRef<HTMLButtonElement>(null);\n  const sidebarRef = useRef<HTMLElement>(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -84,7 +86,10 @@ export function DashboardSidebar() {
     <>
       <button
         type="button"
-        ref={menuButtonRef}\n        tabIndex={mobileOpen ? -1 : 0}\n        aria-hidden={mobileOpen || undefined}\n        className="ux-icon-button fixed left-4 top-4 z-[70] md:hidden"
+        ref={menuButtonRef}
+        tabIndex={mobileOpen ? -1 : 0}
+        aria-hidden={mobileOpen || undefined}
+        className="ux-icon-button fixed left-4 top-4 z-[70] md:hidden"
         onClick={() => setMobileOpen((value) => !value)}
         aria-label={mobileOpen ? "Close dashboard navigation" : "Open dashboard navigation"}
         aria-expanded={mobileOpen}
