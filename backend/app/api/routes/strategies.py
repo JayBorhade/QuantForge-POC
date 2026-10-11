@@ -208,6 +208,18 @@ async def create_strategy(
     current_user: CurrentUser,
     db: DbSession,
 ):
+    from strategies.registry import validate_strategy_parameters
+
+    try:
+        validated_parameters = validate_strategy_parameters(
+            data.strategy_type.value, data.parameters
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
     if data.schedule_portfolio_id is not None:
         portfolio = await db.get(Portfolio, data.schedule_portfolio_id)
         if portfolio is None or portfolio.user_id != current_user.id:
@@ -224,7 +236,7 @@ async def create_strategy(
         description=data.description,
         strategy_type=data.strategy_type,
         symbol=data.symbol.upper(),
-        parameters=data.parameters,
+        parameters=validated_parameters,
         is_paper=data.is_paper,
         schedule_cron=data.schedule_cron,
         schedule_portfolio_id=data.schedule_portfolio_id,
@@ -256,6 +268,19 @@ async def update_strategy(
 ):
     strategy = await _get_user_strategy(db, strategy_id, current_user.id)
     update_data = data.model_dump(exclude_unset=True)
+    if "parameters" in update_data and update_data["parameters"] is not None:
+        from strategies.registry import validate_strategy_parameters
+
+        try:
+            update_data["parameters"] = validate_strategy_parameters(
+                strategy.strategy_type.value, update_data["parameters"]
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
+
     next_schedule = update_data.get("schedule_cron", strategy.schedule_cron)
     next_portfolio_id = update_data.get("schedule_portfolio_id", strategy.schedule_portfolio_id)
     next_is_paper = update_data.get("is_paper", strategy.is_paper)
