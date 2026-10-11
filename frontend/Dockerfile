@@ -6,6 +6,7 @@ RUN npm install
 
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV APP_ENV=production
 RUN npm run build
 
 FROM node:20-alpine AS runner
