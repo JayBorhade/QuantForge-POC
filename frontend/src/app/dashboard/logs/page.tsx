@@ -47,7 +47,7 @@ export default function LogsPage() {
     try {
       if (tab === "strategy") {
         const response = await logsApi.strategy();
-        setStrategyLogs(Array.isArray(response.data) ? response.data : []);
+        setStrategyLogs(Array.isArray(response.data) ? response.data.filter((entry: StrategyLog) => entry.message !== "QuantForge engine ready — no runs yet") : []);
       } else {
         const response = await logsApi.audit();
         setAuditLogs(Array.isArray(response.data) ? response.data : []);
