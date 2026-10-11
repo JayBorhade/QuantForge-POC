@@ -16,7 +16,7 @@ export default function FeaturesPage() {
   return (
     <div className="min-h-screen">
       <Navbar />
-      <div className="mx-auto max-w-7xl px-4 py-32">
+      <main id="page-content" tabIndex={-1} className="mx-auto max-w-7xl px-4 py-32 outline-none">
         <h1 className="text-4xl font-bold text-gradient">Platform Features</h1>
         <p className="mt-4 max-w-2xl text-muted-foreground">
           Institutional-grade infrastructure for systematic traders.
@@ -32,7 +32,7 @@ export default function FeaturesPage() {
         <Link href="/signup" className="inline-block mt-12">
           <Button size="lg">Start Free Trial</Button>
         </Link>
-      </div>
+      </main>
     </div>
   );
 }
