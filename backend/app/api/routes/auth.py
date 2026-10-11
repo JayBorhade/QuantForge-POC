@@ -9,7 +9,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.core.config import get_settings
 from app.core.csrf import set_csrf_cookie
 from app.core.encryption import decrypt_mfa_secret, encrypt_mfa_secret
-from app.core.security import decode_token, generate_token, hash_password
+from app.core.security import decode_token, generate_token, hash_one_time_token, hash_password
 from app.core.rate_limit import limiter
 from app.models.user import User
 from app.schemas.auth import (
@@ -69,13 +69,16 @@ def clear_auth_cookies(response: Response) -> None:
 @router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
 async def signup(data: SignupRequest, request: Request, db: DbSession, background_tasks: BackgroundTasks):
+    # Keep the raw verification token only in the outbound email; the DB stores
+    # only its SHA-256 digest. AuthService.register stores a digest below.
     user = await AuthService.register(db, data, request)
     if user.email_verification_token:
-        background_tasks.add_task(
-            send_verification_email,
-            user.email,
-            user.email_verification_token,
-        )
+        # Registration's raw token is intentionally not recoverable from storage;
+        # create a fresh one-time token for delivery and persist only its digest.
+        raw_token = generate_token()
+        user.email_verification_token = hash_one_time_token(raw_token)
+        user.email_verification_expires = datetime.now(timezone.utc) + timedelta(hours=24)
+        background_tasks.add_task(send_verification_email, user.email, raw_token)
     return user
 
 
@@ -138,7 +141,7 @@ async def forgot_password(data: ForgotPasswordRequest, db: DbSession, request: R
     user = result.scalar_one_or_none()
     if user:
         token = generate_token()
-        user.password_reset_token = token
+        user.password_reset_token = hash_one_time_token(token)
         user.password_reset_expires = datetime.now(timezone.utc) + timedelta(hours=1)
         await log_audit(db, action="user.forgot_password", user_id=user.id, ip_address=request.client.host if request.client else None)
         await send_password_reset_email(user.email, token)
@@ -150,7 +153,7 @@ async def forgot_password(data: ForgotPasswordRequest, db: DbSession, request: R
 async def reset_password(data: ResetPasswordRequest, db: DbSession, request: Request):
     result = await db.execute(
         select(User).where(
-            User.password_reset_token == data.token,
+            User.password_reset_token == hash_one_time_token(data.token),
             User.password_reset_expires > datetime.now(timezone.utc),
         )
     )
@@ -184,7 +187,8 @@ async def resend_verification(
     user = result.scalar_one_or_none()
     if user and not user.is_verified:
         token = generate_token()
-        user.email_verification_token = token
+        user.email_verification_token = hash_one_time_token(token)
+        user.email_verification_expires = datetime.now(timezone.utc) + timedelta(hours=24)
         background_tasks.add_task(send_verification_email, user.email, token)
     return {
         "message": "If the account exists and needs verification, a verification email has been sent"
@@ -194,13 +198,19 @@ async def resend_verification(
 @router.post("/verify-email")
 @limiter.limit("10/minute")
 async def verify_email(data: VerifyEmailRequest, request: Request, db: DbSession):
-    result = await db.execute(select(User).where(User.email_verification_token == data.token))
+    result = await db.execute(
+        select(User).where(
+            User.email_verification_token == hash_one_time_token(data.token),
+            User.email_verification_expires > datetime.now(timezone.utc),
+        )
+    )
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")
 
     user.is_verified = True
     user.email_verification_token = None
+    user.email_verification_expires = None
     return {"message": "Email verified successfully"}
 
 
