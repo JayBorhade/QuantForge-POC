@@ -18,7 +18,9 @@ interface Trade {
 }
 
 export default function LiveTradingPage() {
-  const [trades, setTrades] = useState<Trade[]>([]);\n  const [loading, setLoading] = useState(true);\n  const [error, setError] = useState("");
+  const [trades, setTrades] = useState<Trade[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const { connected, lastMessage } = useWebSocket();
 
   useEffect(() => {
@@ -50,7 +52,8 @@ export default function LiveTradingPage() {
   return (
     <div>
       <DashboardHeader title="Live Trading Panel" subtitle="Real-time positions and execution feed" />
-      {error && <p className="mb-4 rounded-lg border border-red-500/30 p-3 text-sm text-red-500" role="alert">{error}</p>}\n      <div className="mb-4 flex items-center gap-2" aria-live="polite">
+      {error && <p className="mb-4 rounded-lg border border-red-500/30 p-3 text-sm text-red-500" role="alert">{error}</p>}
+      <div className="mb-4 flex items-center gap-2" aria-live="polite">
         <span className="relative flex h-3 w-3">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
           <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500" />
