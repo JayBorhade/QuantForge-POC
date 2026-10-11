@@ -163,6 +163,7 @@ class StripeWebhookIdempotencyTests(unittest.TestCase):
             response = asyncio.run(stripe_webhook(request(), db))
         self.assertEqual(response, {"received": True})
         self.assertEqual(subscription.status.value, "expired")
+        self.assertEqual(subscription.plan.value, "free")
 
 
 if __name__ == "__main__":
