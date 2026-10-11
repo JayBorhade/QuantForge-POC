@@ -46,7 +46,12 @@ class ExecutionValidationTests(unittest.TestCase):
         )()
         db.execute.side_effect = [owner_result, query_result, MagicMock()]
         broker = AsyncMock()
-        broker.submit_order.side_effect = BrokerSubmissionUnknown("network timeout after send")
+
+        async def uncertain_submit(*args, **kwargs):
+            self.assertGreaterEqual(db.commit.await_count, 1, "order must be durable before broker call")
+            raise BrokerSubmissionUnknown("network timeout after send")
+
+        broker.submit_order.side_effect = uncertain_submit
         service = ExecutionService(db, broker)
         portfolio = type("P", (), {"id": "portfolio", "user_id": "user"})()
 
@@ -65,6 +70,29 @@ class ExecutionValidationTests(unittest.TestCase):
         self.assertNotEqual(created_order.status, OrderStatus.FAILED)
         db.flush.assert_awaited()
         broker.submit_order.assert_awaited_once()
+
+    def test_idempotency_key_cannot_be_reused_for_different_order_payload(self):
+        from app.models.order import Order
+
+        order = Order(
+            portfolio_id="portfolio",
+            client_order_id="same-key",
+            symbol="NIFTY",
+            side=OrderSide.BUY,
+            quantity=Decimal("1"),
+            mode=ExecutionMode.LIVE,
+            order_type=OrderType.MARKET,
+        )
+        self.assertTrue(ExecutionService._matches_existing_request(
+            order, symbol="nifty", side=OrderSide.BUY, quantity=Decimal("1"),
+            mode=ExecutionMode.LIVE, strategy_id=None, order_type=OrderType.MARKET,
+            limit_price=None,
+        ))
+        self.assertFalse(ExecutionService._matches_existing_request(
+            order, symbol="nifty", side=OrderSide.SELL, quantity=Decimal("1"),
+            mode=ExecutionMode.LIVE, strategy_id=None, order_type=OrderType.MARKET,
+            limit_price=None,
+        ))
 
     def test_live_requires_verified_two_factor_owner(self):
         db = AsyncMock()
