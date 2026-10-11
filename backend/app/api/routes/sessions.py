@@ -59,3 +59,7 @@ async def revoke_session(session_id: uuid.UUID, current_user: CurrentUser, db: D
     if not session:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
     session.is_active = False
+    # A revoked session may own an active WebSocket; close the user's sockets
+    # so revocation takes effect immediately rather than at token expiry.
+    from app.api.routes.websocket import manager
+    await manager.disconnect_user(str(current_user.id))
