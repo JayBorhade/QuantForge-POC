@@ -37,7 +37,8 @@ export function ProductUxControls() {
   const hasReadingProgress = pathname === "/docs" || pathname.startsWith("/blog");
 
   useEffect(() => {
-    let stored: string | null = null;\n    try { stored = window.localStorage.getItem("quantforge-theme"); } catch { /* Use the system preference when storage is unavailable. */ }
+    let stored: string | null = null;
+    try { stored = window.localStorage.getItem("quantforge-theme"); } catch { /* Use the system preference when storage is unavailable. */ }
     const initial = stored === "light" || stored === "dark"
       ? stored
       : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
