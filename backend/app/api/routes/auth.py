@@ -191,7 +191,7 @@ async def resend_verification(
     request: Request,
     db: DbSession,
     background_tasks: BackgroundTasks,
- ):
+):
     """Resend verification without revealing whether an email is registered."""
     await enforce_account_rate_limit(data.email, "resend-verification", limit=3, window_seconds=3600)
     result = await db.execute(select(User).where(User.email == data.email.lower()))
