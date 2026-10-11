@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Dict, Set
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from jose import jwt
+import jwt
 from sqlalchemy import select
 
 from app.core.config import get_settings

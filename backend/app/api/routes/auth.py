@@ -3,7 +3,6 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response, status
-from jose import jwt
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
