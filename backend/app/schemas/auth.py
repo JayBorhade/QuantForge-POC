@@ -74,7 +74,7 @@ class ResetPasswordRequest(BaseModel):
 
 
 class VerifyEmailRequest(BaseModel):
-    token: str
+    token: str = Field(..., min_length=32, max_length=256)
 
 
 class VerifyOTPRequest(BaseModel):
