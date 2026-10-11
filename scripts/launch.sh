@@ -86,7 +86,7 @@ done
 
 echo ""
 echo "========================================"
-echo "  QuantForge is LIVE"
+echo "  QuantForge is running locally"
 echo "========================================"
 echo ""
 echo "  App:      http://localhost:3000"
