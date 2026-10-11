@@ -7,6 +7,8 @@ from fastapi import HTTPException
 
 from app.api.routes.portfolios import _get_portfolio
 from app.api.routes.strategies import _get_user_strategy
+from app.api.routes.deployments import _get_deployment
+from app.api.routes.risk import _get_portfolio as _get_risk_portfolio
 
 
 class ResourceOwnershipGuardTests(unittest.IsolatedAsyncioTestCase):
@@ -36,6 +38,12 @@ class ResourceOwnershipGuardTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_strategy_lookup_is_owner_scoped_and_hides_foreign_resource(self):
         await self._assert_not_found_and_scoped(_get_user_strategy, "strategies")
+
+    async def test_deployment_lookup_is_owner_scoped_and_hides_foreign_resource(self):
+        await self._assert_not_found_and_scoped(_get_deployment, "deployments")
+
+    async def test_risk_portfolio_lookup_is_owner_scoped_and_hides_foreign_resource(self):
+        await self._assert_not_found_and_scoped(_get_risk_portfolio, "portfolios")
 
 
 if __name__ == "__main__":
