@@ -28,6 +28,22 @@ class SessionContext:
 
 
 class WebSocketSessionSecurityTests(unittest.TestCase):
+    def test_connection_manager_rejects_connections_over_per_user_limit(self):
+        async def scenario():
+            manager = ConnectionManager()
+            user_id = str(uuid.uuid4())
+            sockets = [
+                type("Socket", (), {"accept": AsyncMock(), "close": AsyncMock()})()
+                for _ in range(manager.MAX_CONNECTIONS_PER_USER + 1)
+            ]
+            for socket in sockets[:-1]:
+                self.assertTrue(await manager.connect(user_id, socket))
+            self.assertFalse(await manager.connect(user_id, sockets[-1]))
+            sockets[-1].accept.assert_not_awaited()
+            sockets[-1].close.assert_awaited_once_with(code=4008, reason="Connection limit reached")
+            self.assertEqual(len(manager.active_connections[user_id]), manager.MAX_CONNECTIONS_PER_USER)
+        asyncio.run(scenario())
+
     def test_disconnect_user_closes_all_active_connections(self):
         manager = ConnectionManager()
         user_id = str(uuid.uuid4())
