@@ -28,10 +28,6 @@ class BacktestLifecycleContractTests(unittest.TestCase):
         self.assertIn("RunStatus.RUNNING", source)
         self.assertIn("worker_token = None", source)
 
-
-if __name__ == "__main__":
-    unittest.main()
-
     def test_cancellation_invalidates_worker_lease(self):
         source = (ROOT / "app/api/routes/strategies.py").read_text(encoding="utf-8")
         self.assertIn("run.status = RunStatus.CANCELLED", source)
@@ -40,5 +36,12 @@ if __name__ == "__main__":
 
     def test_late_worker_exception_cannot_override_cancelled_run(self):
         source = (ROOT / "app/services/backtest_runner.py").read_text(encoding="utf-8")
-        self.assertIn('if run.status == RunStatus.CANCELLED or run.worker_token != lease_token:', source)
+        self.assertIn(
+            "if run.status == RunStatus.CANCELLED or run.worker_token != lease_token:",
+            source,
+        )
         self.assertIn('"Backtest worker lease no longer owns this run"', source)
+
+
+if __name__ == "__main__":
+    unittest.main()
