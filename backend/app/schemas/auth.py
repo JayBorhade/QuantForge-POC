@@ -36,7 +36,7 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=1)
     remember_me: bool = False
-    otp_code: Optional[str] = Field(None, max_length=6)
+    otp_code: Optional[str] = Field(None, min_length=6, max_length=64)
 
 
 class TokenResponse(BaseModel):
