@@ -3,7 +3,7 @@
 from typing import Any, Dict, List
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 
 from app.api.deps import CurrentAdmin, DbSession
@@ -19,10 +19,12 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 async def list_users(
     admin: CurrentAdmin,
     db: DbSession,
-    skip: int = 0,
-    limit: int = 50,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
 ) -> List[Dict[str, Any]]:
-    result = await db.execute(select(User).offset(skip).limit(limit).order_by(User.created_at.desc()))
+    result = await db.execute(
+        select(User).offset(skip).limit(limit).order_by(User.created_at.desc())
+    )
     users = result.scalars().all()
     return [
         {
@@ -47,7 +49,7 @@ async def ban_user(user_id: UUID, admin: CurrentAdmin, db: DbSession):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     user.is_banned = True
     user.is_active = False
-    return {"message": f"User {user.email} banned"}
+    return {"message": "User banned"}
 
 
 @router.post("/users/{user_id}/unban")
@@ -58,13 +60,13 @@ async def unban_user(user_id: UUID, admin: CurrentAdmin, db: DbSession):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     user.is_banned = False
     user.is_active = True
-    return {"message": f"User {user.email} unbanned"}
+    return {"message": "User unbanned"}
 
 
 @router.get("/analytics")
 async def get_analytics(admin: CurrentAdmin, db: DbSession) -> Dict[str, Any]:
     users_count = await db.execute(select(func.count(User.id)))
-    active_users = await db.execute(select(func.count(User.id)).where(User.is_active == True))
+    active_users = await db.execute(select(func.count(User.id)).where(User.is_active.is_(True)))
     subs = await db.execute(select(func.count(Subscription.id)))
     active_strategies = await db.execute(
         select(func.count(Strategy.id)).where(Strategy.status == StrategyStatus.ACTIVE)
@@ -82,7 +84,11 @@ async def get_analytics(admin: CurrentAdmin, db: DbSession) -> Dict[str, Any]:
 
 
 @router.get("/audit-logs")
-async def get_audit_logs(admin: CurrentAdmin, db: DbSession, limit: int = 100) -> List[Dict]:
+async def get_audit_logs(
+    admin: CurrentAdmin,
+    db: DbSession,
+    limit: int = Query(default=100, ge=1, le=500),
+) -> List[Dict]:
     result = await db.execute(
         select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
     )
