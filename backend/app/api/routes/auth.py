@@ -156,7 +156,8 @@ async def reset_password(data: ResetPasswordRequest, db: DbSession, request: Req
     user.password_reset_token = None
     user.password_reset_expires = None
     # A password reset is a credential-compromise boundary: invalidate every
-    # refresh session so existing devices must authenticate with the new password.
+    # refresh session so old refresh tokens cannot mint new access tokens.
+    # Already-issued access tokens remain valid only until their short expiry.
     await AuthService.revoke_sessions(db, user.id)
     await log_audit(db, action="user.reset_password", user_id=user.id)
     return {"message": "Password reset successfully"}
