@@ -4,14 +4,14 @@ import hmac
 import secrets
 from typing import Optional
 
-from fastapi import HTTPException, Request, status
+from fastapi import Request
+from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
 
 CSRF_COOKIE = "csrf_token"
 CSRF_HEADER = "X-CSRF-Token"
 
-# Exact endpoint exemptions prevent similarly named routes from bypassing CSRF.
 CSRF_EXEMPT_SUFFIXES = frozenset({
     "/auth/login",
     "/auth/signup",
@@ -23,10 +23,16 @@ CSRF_EXEMPT_SUFFIXES = frozenset({
 })
 CSRF_EXEMPT_EXACT = frozenset({"/health", "/health/ready", "/api/docs", "/api/openapi.json", "/api/redoc"})
 
+
 def generate_csrf_token() -> str:
     raw = secrets.token_urlsafe(32)
-    signature = hmac.new(get_settings().secret_key.encode("utf-8"), raw.encode("utf-8"), hashlib.sha256).hexdigest()
+    signature = hmac.new(
+        get_settings().secret_key.encode("utf-8"),
+        raw.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
     return f"{raw}.{signature}"
+
 
 def is_csrf_exempt(path: str) -> bool:
     settings = get_settings()
@@ -37,6 +43,7 @@ def is_csrf_exempt(path: str) -> bool:
     websocket_path = f"{api_prefix}/ws"
     return path == websocket_path or path.startswith(websocket_path + "/")
 
+
 def _is_valid_signed_token(token: str) -> bool:
     try:
         raw, supplied_signature = token.rsplit(".", 1)
@@ -44,23 +51,47 @@ def _is_valid_signed_token(token: str) -> bool:
         return False
     if not raw or not supplied_signature:
         return False
-    expected_signature = hmac.new(get_settings().secret_key.encode("utf-8"), raw.encode("utf-8"), hashlib.sha256).hexdigest()
+    expected_signature = hmac.new(
+        get_settings().secret_key.encode("utf-8"),
+        raw.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
     return hmac.compare_digest(supplied_signature, expected_signature)
 
-def validate_csrf(request: Request) -> None:
+
+def validate_csrf(request: Request) -> Optional[JSONResponse]:
     settings = get_settings()
     if not settings.csrf_enabled or request.method in ("GET", "HEAD", "OPTIONS"):
-        return
+        return None
     path = request.url.path
     if is_csrf_exempt(path) or not path.startswith(settings.api_v1_prefix + "/"):
-        return
+        return None
     cookie_token = request.cookies.get(CSRF_COOKIE)
     header_token = request.headers.get(CSRF_HEADER)
-    if not cookie_token or not header_token or not hmac.compare_digest(cookie_token, header_token) or not _is_valid_signed_token(cookie_token):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="CSRF validation failed")
+    if (
+        not cookie_token
+        or not header_token
+        or not hmac.compare_digest(cookie_token, header_token)
+        or not _is_valid_signed_token(cookie_token)
+    ):
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "CSRF validation failed"},
+        )
+    return None
+
 
 def set_csrf_cookie(response, token: Optional[str] = None) -> str:
     settings = get_settings()
     token = token or generate_csrf_token()
-    response.set_cookie(key=CSRF_COOKIE, value=token, httponly=False, secure=settings.cookie_secure, samesite=settings.cookie_samesite, domain=settings.cookie_domain, max_age=86400 * 7, path="/")
+    response.set_cookie(
+        key=CSRF_COOKIE,
+        value=token,
+        httponly=False,
+        secure=settings.cookie_secure,
+        samesite=settings.cookie_samesite,
+        domain=settings.cookie_domain,
+        max_age=86400 * 7,
+        path="/",
+    )
     return token
