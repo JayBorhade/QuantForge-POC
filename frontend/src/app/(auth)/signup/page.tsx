@@ -33,7 +33,7 @@ export default function SignupPage() {
       router.push("/login?registered=1");
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string | object } } })?.response?.data?.detail;
-      setError(typeof detail === "string" ? detail : "Registration failed");
+      setError(detail === "Email already registered" ? detail : "Registration failed. Check your details and try again.");
     }
   };
 
@@ -58,8 +58,11 @@ export default function SignupPage() {
             { key: "confirm_password", label: "Confirm Password", type: "password" },
           ].map((field) => (
             <div key={field.key}>
-              <label className="text-sm text-muted-foreground">{field.label}</label>
+              <label htmlFor={`signup-${field.key}`} className="text-sm text-muted-foreground">{field.label}</label>
               <Input
+                id={`signup-${field.key}`}
+                name={field.key}
+                autoComplete={field.key === "email" ? "email" : field.key === "full_name" ? "name" : field.key === "phone" ? "tel" : "new-password"}
                 type={field.type}
                 value={form[field.key as keyof typeof form]}
                 onChange={update(field.key)}
@@ -68,7 +71,7 @@ export default function SignupPage() {
               />
             </div>
           ))}
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && <p className="text-sm text-red-500" role="alert" aria-live="assertive">{error}</p>}
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? "Creating account..." : "Create Account"}
           </Button>
