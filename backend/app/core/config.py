@@ -89,7 +89,7 @@ class Settings(BaseSettings):
             raise ValueError("ENCRYPTION_KEY must be explicitly configured outside local/test environments")
         if not self.cookie_secure:
             raise ValueError("COOKIE_SECURE must be true outside local/test environments")
-        if self.cookie_domain.strip().lower() in {"localhost", "127.0.0.1"}:
+        if not self.cookie_domain.strip() or self.cookie_domain.strip().lower() in {"localhost", "127.0.0.1"}:
             raise ValueError("COOKIE_DOMAIN must match the deployed hostname outside local/test environments")
         if self.cookie_samesite not in {"lax", "strict", "none"}:
             raise ValueError("COOKIE_SAMESITE must be lax, strict, or none")
