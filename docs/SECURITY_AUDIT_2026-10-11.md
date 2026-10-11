@@ -13,11 +13,11 @@ Reviewed areas include FastAPI middleware and auth dependencies, token/password/
 PR #54 contains substantial hardening changes, but it remains unmerged. The current main branch still has older code in some of the reviewed areas (including permissive CORS methods/headers, the older JWT/password stack, and default local Compose credentials/host bindings). Do not assume PR #54 protections are present in a deployed build until the PR is reviewed, merged, deployed, and re-tested.
 
 Highest-priority remaining gates:
-1. PostgreSQL row-level security is not implemented.
+1. PostgreSQL row-level security is not implemented; enabling it safely requires a reviewed request/worker/webhook context design and PostgreSQL isolation tests.
 2. The existing main branch stores TOTP/MFA seeds in plaintext. PR #54 now includes an encryption helper and Alembic data migration; this proposed migration must pass CI and be applied with the correct ENCRYPTION_KEY in staging before the risk can be considered closed.
 3. Route-by-route IDOR/BOLA adversarial tests are not complete.
 4. Stripe signature/replay/idempotency, Redis-backed rate limits, cookie/proxy/TLS, SMTP, and broker flows require staging validation.
-5. Security/dependency CI reported by the PR should be re-run against the final merged commit; full npm audit has a documented development-tooling residual.
+5. The CI runs on the previously reviewed branch head passed backend/frontend CI, the PostgreSQL migration baseline, CodeQL for Python and JavaScript/TypeScript, and dependency audit. Any subsequent commit must pass these checks again. Full npm audit has a documented development-tooling residual.
 
 ## 20-check assessment
 
@@ -25,7 +25,7 @@ Highest-priority remaining gates:
 |---:|---|---|---|
 | 1 | SQL injection | SQLAlchemy ORM/bound parameters are the standard pattern in sampled data-access code; no confirmed user-controlled SQL interpolation was established in this bounded review. | **Partially verified** — search all raw SQL/text() uses and test any dynamic identifiers/filters. |
 | 2 | Cross-site scripting (XSS) | React's normal text rendering escapes values; source search in the PR notes did not identify dangerouslySetInnerHTML. | **Baseline present; runtime test needed** — exercise strategy names, logs, notifications, errors, and all user-controlled text in a browser. |
-| 3 | CSRF | PR #54 introduces a signed double-submit token, constant-time comparison, and exact-path exemptions. Main has an older unsigned equality-only implementation. | **Fix proposed, not on main** — verify login/refresh/logout and all cookie-authenticated mutations behind the real proxy. |
+| 3 | CSRF | PR #54 introduces a signed double-submit token, constant-time comparison, and exact-path exemptions. The latest branch removes `/auth/refresh` and `/auth/resend-verification` from the exemption list and adds regression tests. Main has an older unsigned equality-only implementation. | **Fix proposed, not on main** — verify login/refresh/logout and all cookie-authenticated mutations behind the real proxy. |
 | 4 | Insecure file uploads | No application upload endpoint was identified in the reviewed route surface. | **Not applicable to current feature surface** — do not add uploads without strict size/type/content validation, random names, isolated storage, and scanning appropriate to the file type. |
 | 5 | IDOR / broken object-level authorization | The app uses authenticated-user dependencies and ownership checks in sampled routes. | **Open release gate** — add adversarial two-user tests for every resource ID and verify read, update, delete, export, websocket, and nested-resource paths. |
 | 6 | Missing rate limiting | Global SlowAPI limiting exists; PR #54 adds tighter limits to auth, recovery, verification, MFA, broker connect/quote routes and Redis storage outside local/test. | **Fix proposed, runtime validation needed** — test 429 behavior across replicas and confirm Redis is mandatory/healthy in deployed environments. |
