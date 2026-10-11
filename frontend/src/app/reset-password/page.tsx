@@ -31,13 +31,13 @@ function ResetForm() {
   };
 
   if (!token) {
-    return <p className="text-red-400">Missing reset token. Request a new link.</p>;
+    return <p className="text-red-500" role="alert">Missing reset token. Request a new link.</p>;
   }
 
   if (done) {
     return (
       <div className="text-center">
-        <p className="text-emerald-400">Password reset successfully.</p>
+        <p className="text-emerald-500" role="status" aria-live="polite">Password reset successfully.</p>
         <Link href="/login" className="mt-4 inline-block text-primary hover:underline">Sign in</Link>
       </div>
     );
@@ -45,7 +45,7 @@ function ResetForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <Input type="password" placeholder="New password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+      <div><label htmlFor="new-password" className="mb-1 block text-sm font-medium">New password</label><Input id="new-password" name="new-password" autoComplete="new-password" type="password" placeholder="New password" value={password} onChange={(e) => setPassword(e.target.value)} required />
       <Input type="password" placeholder="Confirm password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
       {error && <p className="text-sm text-red-400">{error}</p>}
       <Button type="submit" className="w-full">Reset Password</Button>
