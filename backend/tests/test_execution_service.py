@@ -59,6 +59,7 @@ class ExecutionValidationTests(unittest.TestCase):
                     quantity=Decimal("1"),
                     mode=ExecutionMode.LIVE,
                     client_order_id="test-unknown",
+                    estimated_price=Decimal("100"),
                 ))
 
         created_order = next(call.args[0] for call in db.add.call_args_list if call.args)
@@ -87,6 +88,48 @@ class ExecutionValidationTests(unittest.TestCase):
                 quantity=Decimal("1"),
                 mode=ExecutionMode.LIVE,
                 client_order_id="test-unverified",
+            ))
+
+        broker.submit_order.assert_not_awaited()
+
+    def test_non_finite_quantity_and_prices_are_rejected_before_database_access(self):
+        service = ExecutionService(AsyncMock())
+        base = {
+            "portfolio": type("P", (), {"id": "portfolio"})(),
+            "symbol": "NIFTY",
+            "side": OrderSide.BUY,
+            "mode": ExecutionMode.PAPER,
+            "client_order_id": "non-finite",
+        }
+        with self.assertRaisesRegex(ValueError, "quantity must be finite and positive"):
+            asyncio.run(service.submit(quantity=Decimal("NaN"), **base))
+        with self.assertRaisesRegex(ValueError, "estimated_price must be finite and positive"):
+            asyncio.run(service.submit(
+                quantity=Decimal("1"), estimated_price=Decimal("Infinity"), **base
+            ))
+        service.db.execute.assert_not_awaited()
+
+    def test_live_requires_estimated_price_for_pre_trade_risk(self):
+        db = AsyncMock()
+        owner_result = MagicMock()
+        owner_result.scalar_one_or_none.return_value = type(
+            "U", (), {"is_verified": True, "two_factor_enabled": True}
+        )()
+        duplicate_result = MagicMock()
+        duplicate_result.scalar_one_or_none.return_value = None
+        db.execute.side_effect = [owner_result, duplicate_result]
+        broker = AsyncMock()
+        service = ExecutionService(db, broker)
+        portfolio = type("P", (), {"id": "portfolio", "user_id": "user"})()
+
+        with self.assertRaisesRegex(ValueError, "estimated price for pre-trade risk"):
+            asyncio.run(service.submit(
+                portfolio=portfolio,
+                symbol="NIFTY",
+                side=OrderSide.BUY,
+                quantity=Decimal("1"),
+                mode=ExecutionMode.LIVE,
+                client_order_id="live-no-price",
             ))
 
         broker.submit_order.assert_not_awaited()

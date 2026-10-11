@@ -96,6 +96,36 @@ class StrategyExecutionIntentTests(unittest.TestCase):
         second = build_execution_intent(**kwargs)
         self.assertEqual(first.client_order_id, second.client_order_id)
 
+    def test_non_finite_price_and_position_size_are_rejected(self):
+        common = {
+            "strategy": make_strategy(),
+            "portfolio": make_portfolio(),
+            "signal": Signal.BUY,
+            "signal_at": "2026-10-08T10:00:00+00:00",
+        }
+        for bad_price in (Decimal("NaN"), Decimal("Infinity")):
+            with self.subTest(price=bad_price), self.assertRaisesRegex(
+                StrategyExecutionError, "price must be positive and finite"
+            ):
+                build_execution_intent(price=bad_price, **common)
+        with self.assertRaisesRegex(StrategyExecutionError, "position_size_pct"):
+            build_execution_intent(
+                strategy=make_strategy(position_size_pct="NaN"),
+                portfolio=make_portfolio(),
+                signal=Signal.BUY,
+                price=Decimal("100"),
+                signal_at="2026-10-08T10:00:00+00:00",
+            )
+
+    def test_non_finite_portfolio_cash_is_rejected(self):
+        with self.assertRaisesRegex(StrategyExecutionError, "cash balance must be finite"):
+            build_execution_intent(
+                strategy=make_strategy(),
+                portfolio=make_portfolio(cash="NaN"),
+                signal=Signal.BUY,
+                price=Decimal("100"),
+                signal_at="2026-10-08T10:00:00+00:00",
+            )
 
 if __name__ == "__main__":
     unittest.main()

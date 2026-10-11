@@ -47,8 +47,12 @@ class RiskService:
     ) -> RiskDecision:
         if portfolio.status is not PortfolioStatus.ACTIVE:
             return RiskDecision(False, "Portfolio is not active")
-        if quantity <= 0:
-            return RiskDecision(False, "Order quantity must be positive")
+        if not quantity.is_finite() or quantity <= 0:
+            return RiskDecision(False, "Order quantity must be finite and positive")
+        if estimated_price is not None and (
+            not estimated_price.is_finite() or estimated_price <= 0
+        ):
+            return RiskDecision(False, "Estimated price must be finite and positive")
 
         result = await self.db.execute(
             select(RiskLimit).where(RiskLimit.portfolio_id == portfolio.id)

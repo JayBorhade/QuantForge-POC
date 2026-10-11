@@ -21,8 +21,8 @@ class PaperBrokerAdapter:
         self._orders: dict[str, _PaperOrder] = {}
 
     async def submit_order(self, request: BrokerOrderRequest) -> BrokerOrderResult:
-        if request.quantity <= Decimal("0"):
-            raise ValueError("Order quantity must be positive")
+        if not request.quantity.is_finite() or request.quantity <= Decimal("0"):
+            raise ValueError("Order quantity must be finite and positive")
 
         existing = self._orders.get(request.client_order_id)
         if existing is not None:

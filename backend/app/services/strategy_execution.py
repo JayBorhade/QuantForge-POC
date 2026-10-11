@@ -46,19 +46,25 @@ def build_execution_intent(
     except (ValueError, InvalidOperation) as exc:
         raise StrategyExecutionError("Strategy produced an invalid signal or price") from exc
 
-    if market_price <= 0:
-        raise StrategyExecutionError("Strategy execution price must be positive")
+    if not market_price.is_finite() or market_price <= 0:
+        raise StrategyExecutionError("Strategy execution price must be positive and finite")
 
     if normalized_signal is Signal.HOLD:
         return None
 
     signal_at_text = signal_at.isoformat() if isinstance(signal_at, datetime) else str(signal_at)
-    risk_fraction = Decimal(str((strategy.parameters or {}).get("position_size_pct", "0.10")))
-    if risk_fraction <= 0 or risk_fraction > 1:
+    try:
+        risk_fraction = Decimal(str((strategy.parameters or {}).get("position_size_pct", "0.10")))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise StrategyExecutionError("position_size_pct must be in (0, 1]") from exc
+    if not risk_fraction.is_finite() or risk_fraction <= 0 or risk_fraction > 1:
         raise StrategyExecutionError("position_size_pct must be in (0, 1]")
 
     if normalized_signal is Signal.BUY:
-        allocation = portfolio.cash_balance * risk_fraction
+        cash_balance = Decimal(str(portfolio.cash_balance))
+        if not cash_balance.is_finite() or cash_balance < 0:
+            raise StrategyExecutionError("portfolio cash balance must be finite and non-negative")
+        allocation = cash_balance * risk_fraction
         quantity = allocation / market_price
         side = OrderSide.BUY
     else:
@@ -66,9 +72,13 @@ def build_execution_intent(
             (p for p in portfolio.positions if p.symbol.upper() == strategy.symbol.upper()),
             None,
         )
-        if position is None or position.quantity <= 0:
+        if position is None:
             return None
-        quantity = position.quantity
+        quantity = Decimal(str(position.quantity))
+        if not quantity.is_finite() or quantity < 0:
+            raise StrategyExecutionError("position quantity must be finite and non-negative")
+        if quantity == 0:
+            return None
         side = OrderSide.SELL
 
     if quantity <= 0:
