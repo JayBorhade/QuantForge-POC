@@ -1,7 +1,7 @@
 """QuantForge FastAPI Application."""
 
 from contextlib import asynccontextmanager
-from uuid import uuid4
+from uuid import UUID, uuid4
 import logging
 import time
 
@@ -10,18 +10,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from redis.asyncio import from_url as redis_from_url
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 from app.api.router import api_router
 from app.core.config import get_settings
-from app.core.csrf import CSRF_COOKIE, is_csrf_exempt, set_csrf_cookie, validate_csrf
+from app.core.rate_limit import limiter
+from app.core.csrf import CSRF_COOKIE, _is_valid_signed_token, is_csrf_exempt, set_csrf_cookie, validate_csrf
 from app.db.session import engine
 
 settings = get_settings()
 logger = logging.getLogger("quantforge.request")
-limiter = Limiter(key_func=get_remote_address, default_limits=[f"{settings.rate_limit_per_minute}/minute"])
 
 
 @asynccontextmanager
@@ -47,21 +46,25 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 configured_cors_origins = set(settings.cors_origins)
-if not settings.is_production:
+if settings.app_env.strip().lower() in {"development", "local", "test"}:
     configured_cors_origins.update({settings.frontend_url, "http://127.0.0.1:3000"})
 app.add_middleware(
     CORSMiddleware,
     allow_origins=sorted(configured_cors_origins),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-CSRF-Token", "X-Request-ID"],
     expose_headers=["X-CSRF-Token"],
 )
 
 
 @app.middleware("http")
 async def request_id_middleware(request: Request, call_next):
-    request_id = request.headers.get("X-Request-ID") or str(uuid4())
+    supplied_request_id = request.headers.get("X-Request-ID")
+    try:
+        request_id = str(UUID(supplied_request_id)) if supplied_request_id else str(uuid4())
+    except (ValueError, TypeError, AttributeError):
+        request_id = str(uuid4())
     request.state.request_id = request_id
     started = time.perf_counter()
     try:
@@ -90,7 +93,10 @@ async def csrf_middleware(request: Request, call_next):
         request.method == "GET"
         and request.url.path.startswith(settings.api_v1_prefix)
         and not is_csrf_exempt(request.url.path)
-        and not request.cookies.get(CSRF_COOKIE)
+        and (
+            not request.cookies.get(CSRF_COOKIE)
+            or not _is_valid_signed_token(request.cookies.get(CSRF_COOKIE, ""))
+        )
     ):
         set_csrf_cookie(response)
     return response
@@ -101,9 +107,11 @@ async def security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
-    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["X-XSS-Protection"] = "0"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    if settings.is_production:
+    response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if settings.app_env.strip().lower() not in {"development", "local", "test"}:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
 

@@ -40,8 +40,9 @@ class LoginRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
+    # Access tokens are issued only as HttpOnly cookies, never exposed to JS.
+    access_token: Optional[str] = None
+    token_type: str = "cookie"
     expires_in: int
 
 

@@ -19,6 +19,7 @@ from app.core.security import (
     generate_otp,
     generate_token,
     hash_password,
+    needs_password_rehash,
     verify_password,
 )
 from app.models.notification import Notification, NotificationType
@@ -97,6 +98,9 @@ class AuthService:
 
         if not user or not verify_password(password, user.hashed_password):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+        if needs_password_rehash(user.hashed_password):
+            user.hashed_password = hash_password(password)
 
         if user.is_banned:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account suspended")

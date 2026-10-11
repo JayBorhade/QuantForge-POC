@@ -96,6 +96,8 @@ async def get_current_admin(
 ) -> User:
     if current_user.role not in (UserRole.ADMIN, UserRole.SUPERADMIN):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    if not current_user.two_factor_enabled:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Enable multi-factor authentication before using admin functions")
     return current_user
 
 

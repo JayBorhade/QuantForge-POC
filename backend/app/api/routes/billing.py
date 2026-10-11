@@ -1,5 +1,6 @@
 """Stripe billing routes."""
 
+import logging
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -24,6 +25,7 @@ from app.services.stripe_service import (
 )
 
 router = APIRouter(prefix="/billing", tags=["Billing"])
+logger = logging.getLogger("quantforge.billing")
 
 
 class CheckoutRequest(BaseModel):
@@ -117,8 +119,9 @@ async def create_checkout(
         )
         await log_audit(db, action="billing.checkout", user_id=current_user.id, details={"plan": data.plan})
         return result
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        logger.exception("stripe_checkout_session_creation_failed user_id=%s plan=%s", current_user.id, data.plan)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Unable to create checkout session")
 
 
 @router.post("/portal")
@@ -133,8 +136,9 @@ async def billing_portal(current_user: CurrentUser, db: DbSession) -> Dict[str, 
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No billing account found")
     try:
         return await create_portal_session(sub.stripe_customer_id)
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        logger.exception("stripe_billing_portal_creation_failed user_id=%s", current_user.id)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Unable to create billing portal session")
 
 
 @router.post("/webhook")
@@ -147,8 +151,9 @@ async def stripe_webhook(request: Request, db: DbSession):
 
     try:
         event = handle_webhook_event(payload, sig)
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        logger.warning("stripe_webhook_signature_verification_failed")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid webhook signature")
 
     event_id = event.get("id")
     event_type = event["type"]

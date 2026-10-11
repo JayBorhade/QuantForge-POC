@@ -1,5 +1,6 @@
 """Portfolio management routes."""
 
+import logging
 import uuid
 from decimal import Decimal
 from typing import Any, Dict, List
@@ -22,6 +23,7 @@ from app.services.portfolio_valuation import (
 )
 
 router = APIRouter(prefix="/portfolios", tags=["Portfolios"])
+logger = logging.getLogger("quantforge.portfolios")
 
 
 class PortfolioCreate(BaseModel):
@@ -146,8 +148,9 @@ async def portfolio_valuation(
             raise
         except PortfolioValuationError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-        except Exception as exc:
-            raise HTTPException(status_code=502, detail=f"Broker valuation request failed: {exc}") from exc
+        except Exception:
+            logger.exception("broker_portfolio_valuation_failed user_id=%s broker=%s", current_user.id, broker_type.value)
+            raise HTTPException(status_code=502, detail="Broker valuation request failed")
     else:
         raise HTTPException(status_code=400, detail="Unsupported valuation source")
 

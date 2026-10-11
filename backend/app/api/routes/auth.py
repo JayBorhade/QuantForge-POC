@@ -1,7 +1,6 @@
 """Authentication routes."""
 
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response, status
 from jose import jwt
@@ -11,6 +10,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.core.config import get_settings
 from app.core.csrf import set_csrf_cookie
 from app.core.security import decode_token, generate_token, hash_password
+from app.core.rate_limit import limiter
 from app.models.user import User
 from app.schemas.auth import (
     ForgotPasswordRequest,
@@ -56,12 +56,18 @@ def set_auth_cookies(response: Response, access_token: str, refresh_token: str) 
 
 
 def clear_auth_cookies(response: Response) -> None:
-    response.delete_cookie("access_token", path="/")
-    response.delete_cookie("refresh_token", path="/api/v1/auth/refresh")
-    response.delete_cookie("csrf_token", path="/")
+    cookie_options = {
+        "domain": settings.cookie_domain,
+        "secure": settings.cookie_secure,
+        "samesite": settings.cookie_samesite,
+    }
+    response.delete_cookie("access_token", path="/", httponly=True, **cookie_options)
+    response.delete_cookie("refresh_token", path="/api/v1/auth/refresh", httponly=True, **cookie_options)
+    response.delete_cookie("csrf_token", path="/", httponly=False, **cookie_options)
 
 
 @router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("5/minute")
 async def signup(data: SignupRequest, request: Request, db: DbSession, background_tasks: BackgroundTasks):
     user = await AuthService.register(db, data, request)
     if user.email_verification_token:
@@ -74,34 +80,29 @@ async def signup(data: SignupRequest, request: Request, db: DbSession, backgroun
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("5/minute")
 async def login(data: LoginRequest, request: Request, response: Response, db: DbSession):
     user, access_token, refresh_token = await AuthService.authenticate(
         db, data.email, data.password, data.remember_me, request, data.otp_code
     )
     set_auth_cookies(response, access_token, refresh_token)
-    return TokenResponse(
-        access_token=access_token,
-        expires_in=settings.access_token_expire_minutes * 60,
-    )
+    return TokenResponse(expires_in=settings.access_token_expire_minutes * 60)
 
 
 @router.post("/refresh", response_model=TokenResponse)
+@limiter.limit("10/minute")
 async def refresh_token(
     request: Request,
     response: Response,
     db: DbSession,
-    refresh_token: Optional[str] = None,
 ):
-    token = refresh_token or request.cookies.get("refresh_token")
+    token = request.cookies.get("refresh_token")
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No refresh token")
 
     access_token, new_refresh = await AuthService.refresh_tokens(db, token, request)
     set_auth_cookies(response, access_token, new_refresh)
-    return TokenResponse(
-        access_token=access_token,
-        expires_in=settings.access_token_expire_minutes * 60,
-    )
+    return TokenResponse(expires_in=settings.access_token_expire_minutes * 60)
 
 
 @router.post("/logout")
@@ -131,6 +132,7 @@ async def get_me(current_user: CurrentUser):
 
 
 @router.post("/forgot-password")
+@limiter.limit("3/minute")
 async def forgot_password(data: ForgotPasswordRequest, db: DbSession, request: Request):
     result = await db.execute(select(User).where(User.email == data.email.lower()))
     user = result.scalar_one_or_none()
@@ -144,6 +146,7 @@ async def forgot_password(data: ForgotPasswordRequest, db: DbSession, request: R
 
 
 @router.post("/reset-password")
+@limiter.limit("5/minute")
 async def reset_password(data: ResetPasswordRequest, db: DbSession, request: Request):
     result = await db.execute(
         select(User).where(
@@ -169,8 +172,10 @@ async def reset_password(data: ResetPasswordRequest, db: DbSession, request: Req
 
 
 @router.post("/resend-verification")
+@limiter.limit("3/minute")
 async def resend_verification(
     data: ForgotPasswordRequest,
+    request: Request,
     db: DbSession,
     background_tasks: BackgroundTasks,
 ):
@@ -187,7 +192,8 @@ async def resend_verification(
 
 
 @router.post("/verify-email")
-async def verify_email(data: VerifyEmailRequest, db: DbSession):
+@limiter.limit("10/minute")
+async def verify_email(data: VerifyEmailRequest, request: Request, db: DbSession):
     result = await db.execute(select(User).where(User.email_verification_token == data.token))
     user = result.scalar_one_or_none()
     if not user:
@@ -199,14 +205,16 @@ async def verify_email(data: VerifyEmailRequest, db: DbSession):
 
 
 @router.post("/2fa/setup", response_model=TwoFactorSetupResponse)
-async def setup_2fa(current_user: CurrentUser, db: DbSession):
+@limiter.limit("3/minute")
+async def setup_2fa(request: Request, current_user: CurrentUser, db: DbSession):
     secret, uri = AuthService.setup_2fa(current_user)
     current_user.two_factor_secret = secret
     return TwoFactorSetupResponse(secret=secret, qr_uri=uri)
 
 
 @router.post("/2fa/enable")
-async def enable_2fa(data: TwoFactorVerifyRequest, current_user: CurrentUser, db: DbSession):
+@limiter.limit("5/minute")
+async def enable_2fa(data: TwoFactorVerifyRequest, request: Request, current_user: CurrentUser, db: DbSession):
     import pyotp
 
     if not current_user.two_factor_secret:
@@ -221,7 +229,8 @@ async def enable_2fa(data: TwoFactorVerifyRequest, current_user: CurrentUser, db
 
 
 @router.post("/2fa/disable")
-async def disable_2fa(data: TwoFactorVerifyRequest, current_user: CurrentUser, db: DbSession):
+@limiter.limit("5/minute")
+async def disable_2fa(data: TwoFactorVerifyRequest, request: Request, current_user: CurrentUser, db: DbSession):
     import pyotp
 
     totp = pyotp.TOTP(current_user.two_factor_secret)
