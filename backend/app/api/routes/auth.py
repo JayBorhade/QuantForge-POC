@@ -207,6 +207,12 @@ async def verify_email(data: VerifyEmailRequest, request: Request, db: DbSession
 @router.post("/2fa/setup", response_model=TwoFactorSetupResponse)
 @limiter.limit("3/minute")
 async def setup_2fa(request: Request, current_user: CurrentUser, db: DbSession):
+    # Never silently replace a factor that is already protecting the account.
+    if current_user.two_factor_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="2FA is already enabled. Disable it with a valid OTP before setting up a new factor.",
+        )
     secret, uri = AuthService.setup_2fa(current_user)
     current_user.two_factor_secret = encrypt_mfa_secret(secret)
     return TwoFactorSetupResponse(secret=secret, qr_uri=uri)
@@ -233,7 +239,9 @@ async def enable_2fa(data: TwoFactorVerifyRequest, request: Request, current_use
 async def disable_2fa(data: TwoFactorVerifyRequest, request: Request, current_user: CurrentUser, db: DbSession):
     import pyotp
 
-    totp = pyotp.TOTP(current_user.two_factor_secret)
+    if not current_user.two_factor_secret:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="2FA is not configured")
+    totp = pyotp.TOTP(decrypt_mfa_secret(current_user.two_factor_secret))
     if not totp.verify(data.otp_code, valid_window=1):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OTP")
 
