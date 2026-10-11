@@ -3,7 +3,7 @@
 from decimal import Decimal
 from typing import Any, Dict, List
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
 from app.api.deps import CurrentUser, DbSession
@@ -59,7 +59,11 @@ async def get_overview(current_user: CurrentUser, db: DbSession) -> Dict[str, An
 
 
 @router.get("/recent-trades")
-async def get_recent_trades(current_user: CurrentUser, db: DbSession, limit: int = 10) -> List[Dict]:
+async def get_recent_trades(
+    current_user: CurrentUser,
+    db: DbSession,
+    limit: int = Query(default=10, ge=1, le=100),
+) -> List[Dict]:
     result = await db.execute(
         select(Trade)
         .join(Portfolio)

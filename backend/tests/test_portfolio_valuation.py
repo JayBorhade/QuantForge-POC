@@ -55,6 +55,19 @@ class PortfolioValuationTests(unittest.TestCase):
             asyncio.run(service.value_portfolio(portfolio))
         db.flush.assert_not_awaited()
 
+    def test_non_finite_market_prices_are_rejected_without_persisting(self):
+        position = MagicMock(
+            symbol="ABC", quantity=Decimal("10"),
+            average_cost=Decimal("100"), realized_pnl=Decimal("0"),
+        )
+        portfolio = MagicMock(id="portfolio", cash_balance=Decimal("500"))
+        for price in ("NaN", "Infinity", "-Infinity"):
+            with self.subTest(price=price):
+                service, db = self._service([position], {"ABC": price})
+                with self.assertRaises(PortfolioValuationError):
+                    asyncio.run(service.value_portfolio(portfolio))
+                db.flush.assert_not_awaited()
+
     def test_latest_execution_quote_provider_returns_latest_paper_mark(self):
         db = AsyncMock()
         result = MagicMock()

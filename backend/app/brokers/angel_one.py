@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import hashlib
 from typing import Any
 
 import httpx
 
-from app.brokers.base import BrokerOrderRequest, BrokerOrderResult
+from app.brokers.base import BrokerOrderRequest, BrokerOrderResult, BrokerSubmissionUnknown, BrokerSubmissionRejected
 from app.models.order import OrderType
 
 
@@ -45,7 +46,7 @@ class AngelOneBrokerAdapter:
             return "submitted"
         if "PART" in value:
             return "partially_filled"
-        return "failed"
+        raise ValueError("Unsupported Angel One order status")
 
     async def connect(self) -> bool:
         try:
@@ -62,8 +63,11 @@ class AngelOneBrokerAdapter:
         required = ("exchange", "symboltoken", "producttype")
         missing = [key for key in required if not request.broker_params.get(key)]
         if missing:
-            raise ValueError(f"Angel One order missing broker_params: {', '.join(missing)}")
+            raise BrokerSubmissionRejected(f"Angel One order missing broker_params: {', '.join(missing)}")
 
+        # Angel One exposes ordertag in its order book; derive a deterministic
+        # compact tag from the client id so uncertain submissions can be found.
+        client_tag = "qf" + hashlib.sha256(request.client_order_id.encode()).hexdigest()[:17]
         payload: dict[str, Any] = {
             "variety": request.broker_params.get("variety", "NORMAL"),
             "tradingsymbol": request.symbol,
@@ -77,9 +81,10 @@ class AngelOneBrokerAdapter:
             "price": str(request.limit_price or 0),
             "squareoff": "0",
             "stoploss": "0",
+            "ordertag": client_tag,
         }
         if request.order_type is OrderType.LIMIT and request.limit_price is None:
-            raise ValueError("Angel One LIMIT order requires limit_price")
+            raise BrokerSubmissionRejected("Angel One LIMIT order requires limit_price")
 
         async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
             response = await client.post(
@@ -87,16 +92,79 @@ class AngelOneBrokerAdapter:
                 headers=self._headers(),
                 json=payload,
             )
+            if response.status_code >= 500:
+                raise BrokerSubmissionUnknown(
+                    f"Angel One returned HTTP {response.status_code}; order outcome is unknown"
+                )
             data = response.json()
             if response.status_code >= 400 or data.get("status") is not True:
-                raise RuntimeError(data.get("message") or "Angel One order failed")
+                raise BrokerSubmissionRejected(
+                    data.get("message") or f"Angel One rejected the order ({response.status_code})"
+                )
             order_id = (data.get("data") or {}).get("orderid") or (data.get("data") or {}).get("uniqueorderid")
-            if not order_id:
-                raise RuntimeError("Angel One did not return an order id")
-            return BrokerOrderResult(str(order_id), "submitted")
+            unique_order_id = (data.get("data") or {}).get("uniqueorderid")
+            if not order_id or not unique_order_id:
+                raise BrokerSubmissionUnknown(
+                    "Angel One may have accepted the order without returning complete order identifiers"
+                )
+            return BrokerOrderResult(
+                f"angelone:{order_id}:{unique_order_id}", "submitted"
+            )
+
+    @staticmethod
+    def _client_tag(client_order_id: str) -> str:
+        return "qf" + hashlib.sha256(client_order_id.encode()).hexdigest()[:17]
+
+    async def find_order_by_client_order_id(
+        self, client_order_id: str, symbol: str
+    ) -> BrokerOrderResult | None:
+        async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
+            response = await client.get(
+                f"{self.BASE_URL}/rest/secure/angelbroking/order/v1/getOrderBook",
+                headers=self._headers(),
+            )
+            if response.status_code >= 500:
+                raise BrokerSubmissionUnknown(
+                    f"Angel One order-book lookup returned HTTP {response.status_code}"
+                )
+            response.raise_for_status()
+            data = response.json()
+        if data.get("status") is not True:
+            raise RuntimeError("Angel One order-book lookup failed")
+        expected_tag = self._client_tag(client_order_id)
+        for item in data.get("data") or []:
+            tag = item.get("ordertag") or item.get("orderTag")
+            if tag != expected_tag:
+                continue
+            if str(item.get("tradingsymbol", "")).upper() != symbol.upper():
+                continue
+            filled = Decimal(str(item.get("filledshares", "0")))
+            average = Decimal(str(item.get("averageprice", "0")))
+            order_id = item.get("orderid")
+            unique_order_id = item.get("uniqueorderid")
+            if not order_id or not unique_order_id:
+                raise BrokerSubmissionUnknown("Angel One order book returned incomplete order identifiers")
+            return BrokerOrderResult(
+                broker_order_id=f"angelone:{order_id}:{unique_order_id}",
+                status=self._status(str(item.get("orderstatus") or item.get("status", "open"))),
+                filled_quantity=filled,
+                average_fill_price=average if average > 0 else None,
+            )
+        return None
+
+    @staticmethod
+    def _split_broker_order_id(broker_order_id: str) -> tuple[str, str]:
+        if broker_order_id.startswith("angelone:"):
+            parts = broker_order_id.split(":", 2)
+            if len(parts) == 3 and parts[1] and parts[2]:
+                return parts[1], parts[2]
+            raise ValueError("Invalid Angel One broker order identifier")
+        # Backward compatibility for orders created before composite IDs.
+        return broker_order_id, broker_order_id
 
     async def cancel_order(self, broker_order_id: str) -> None:
-        payload = {"variety": "NORMAL", "orderid": broker_order_id}
+        order_id, _ = self._split_broker_order_id(broker_order_id)
+        payload = {"variety": "NORMAL", "orderid": order_id}
         async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
             response = await client.post(
                 f"{self.BASE_URL}/rest/secure/angelbroking/order/v1/cancelOrder",
@@ -109,9 +177,10 @@ class AngelOneBrokerAdapter:
                 raise RuntimeError(data.get("message") or "Angel One cancellation failed")
 
     async def get_order(self, broker_order_id: str) -> BrokerOrderResult:
+        _, unique_order_id = self._split_broker_order_id(broker_order_id)
         async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
             response = await client.get(
-                f"{self.BASE_URL}/rest/secure/angelbroking/order/v1/details/{broker_order_id}",
+                f"{self.BASE_URL}/rest/secure/angelbroking/order/v1/details/{unique_order_id}",
                 headers=self._headers(),
             )
             response.raise_for_status()

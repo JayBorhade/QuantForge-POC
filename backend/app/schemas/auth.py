@@ -36,12 +36,13 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=1)
     remember_me: bool = False
-    otp_code: Optional[str] = Field(None, max_length=6)
+    otp_code: Optional[str] = Field(None, min_length=6, max_length=64)
 
 
 class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
+    # Access tokens are issued only as HttpOnly cookies, never exposed to JS.
+    access_token: Optional[str] = None
+    token_type: str = "cookie"
     expires_in: int
 
 
@@ -50,9 +51,20 @@ class ForgotPasswordRequest(BaseModel):
 
 
 class ResetPasswordRequest(BaseModel):
-    token: str
+    token: str = Field(..., min_length=32, max_length=256)
     password: str = Field(..., min_length=8, max_length=128)
-    confirm_password: str
+    confirm_password: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not re.search(r"[a-z]", v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not re.search(r"\d", v):
+            raise ValueError("Password must contain at least one digit")
+        return v
 
     @model_validator(mode="after")
     def passwords_match(self):
@@ -62,7 +74,7 @@ class ResetPasswordRequest(BaseModel):
 
 
 class VerifyEmailRequest(BaseModel):
-    token: str
+    token: str = Field(..., min_length=32, max_length=256)
 
 
 class VerifyOTPRequest(BaseModel):

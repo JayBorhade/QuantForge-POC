@@ -4,3 +4,13 @@ __pycache__
 .git
 *.db
 .pytest_cache
+
+.env
+.env.*
+!.env.example
+tests/
+coverage.xml
+.coverage
+*.pem
+*.key
+secrets/

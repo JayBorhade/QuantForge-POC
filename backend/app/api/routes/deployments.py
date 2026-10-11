@@ -87,20 +87,20 @@ async def create_deployment(data: DeploymentCreate, current_user: VerifiedUser, 
 
 @router.post("/{deployment_id}/start")
 async def start_deployment(deployment_id: uuid.UUID, current_user: VerifiedUser, db: DbSession):
-    deployment = await _get_deployment(db, deployment_id, current_user.id)
-    deployment.status = DeploymentStatus.RUNNING
-    from datetime import datetime, timezone
-    deployment.deployed_at = datetime.now(timezone.utc)
-    return {"message": "Deployment started", "id": str(deployment.id)}
+    await _get_deployment(db, deployment_id, current_user.id)
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Deployment runtime is not configured; no deployment state was changed.",
+    )
 
 
 @router.post("/{deployment_id}/stop")
 async def stop_deployment(deployment_id: uuid.UUID, current_user: CurrentUser, db: DbSession):
-    deployment = await _get_deployment(db, deployment_id, current_user.id)
-    deployment.status = DeploymentStatus.STOPPED
-    from datetime import datetime, timezone
-    deployment.stopped_at = datetime.now(timezone.utc)
-    return {"message": "Deployment stopped", "id": str(deployment.id)}
+    await _get_deployment(db, deployment_id, current_user.id)
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Deployment runtime is not configured; no deployment state was changed.",
+    )
 
 
 async def _get_deployment(db, deployment_id: uuid.UUID, user_id: uuid.UUID) -> Deployment:
