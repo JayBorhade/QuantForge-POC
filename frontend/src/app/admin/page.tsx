@@ -14,7 +14,7 @@ export default function AdminPage() {
   }, []);
 
   return (
-    <div className="min-h-screen p-8 ml-0">
+    <main id="page-content" tabIndex={-1} className="min-h-screen p-8 ml-0 outline-none">
       <h1 className="text-2xl font-bold">Admin Panel</h1>
       <div className="mt-6 grid gap-4 sm:grid-cols-4">
         {analytics &&
@@ -48,6 +48,6 @@ export default function AdminPage() {
           </table>
         </div>
       </Card>
-    </div>
+    </main>
   );
 }
