@@ -39,7 +39,8 @@ export function DashboardSidebar() {
   const { logout, user } = useAuthStore();
   const [mobileOpen, setMobileOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
-  const sidebarRef = useRef<HTMLElement>(null);\n  const wasMobileOpenRef = useRef(false);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const wasMobileOpenRef = useRef(false);
 
   useEffect(() => {
     setMobileOpen(false);
