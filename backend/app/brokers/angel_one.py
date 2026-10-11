@@ -46,7 +46,7 @@ class AngelOneBrokerAdapter:
             return "submitted"
         if "PART" in value:
             return "partially_filled"
-        return "failed"
+        raise ValueError("Unsupported Angel One order status")
 
     async def connect(self) -> bool:
         try:
