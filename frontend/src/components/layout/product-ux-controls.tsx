@@ -31,7 +31,7 @@ export function ProductUxControls() {
   const [showTop, setShowTop] = useState(false);
   const [progress, setProgress] = useState(0);
   const isMarketing = !pathname.startsWith("/dashboard") && pathname !== "/admin";
-  const hasReadingProgress = pathname === "/docs" || pathname.startsWith("/blog/");
+  const hasReadingProgress = pathname === "/docs" || pathname.startsWith("/blog");
 
   useEffect(() => {
     const stored = window.localStorage.getItem("quantforge-theme");
