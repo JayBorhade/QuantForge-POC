@@ -189,6 +189,17 @@ class RiskTests(unittest.TestCase):
         ))
         self.assertTrue(decision.approved)
 
+    def test_missing_risk_limits_block_live_orders_when_required(self):
+        p = portfolio()
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=Result(None))
+        decision = asyncio.run(RiskService(db).evaluate(
+            portfolio=p, symbol="NIFTY", side=OrderSide.BUY,
+            quantity=Decimal("1"), estimated_price=Decimal("100"), require_limits=True,
+        ))
+        self.assertFalse(decision.approved)
+        self.assertIn("not configured", decision.reason)
+
     def test_non_finite_order_inputs_are_rejected_before_queries(self):
         p = portfolio()
         db = AsyncMock()
