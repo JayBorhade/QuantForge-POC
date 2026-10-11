@@ -1,4 +1,6 @@
-# QuantForge — Launch Today
+# QuantForge — Local Development Launch
+
+> **Local development only.** The example settings and loopback URLs below are not a production deployment guide. Never reuse local credentials or example secrets in a public environment. For production, use `docs/DEPLOYMENT.md`, a secret manager, HTTPS, and unique high-entropy secrets.
 
 ## Fastest path — no Docker (Windows)
 
@@ -11,7 +13,7 @@ cd c:\Users\Jay\Desktop\QuantForge
 
 Uses SQLite (no PostgreSQL install). Open **http://localhost:3000**
 
-**Or double-click `START.bat`** in the project folder.
+**Or double-click `START.bat`** in the project folder. The local launcher generates fresh random signing secrets for each local run; restarting may invalidate local sessions.
 
 ### Two windows (recommended)
 
@@ -102,7 +104,7 @@ docker compose --profile workers up -d
 
 ## Before public production
 
-1. Change `SECRET_KEY`, `JWT_SECRET_KEY`, `POSTGRES_PASSWORD` in `.env`
+1. Generate unique high-entropy `SECRET_KEY`, `JWT_SECRET_KEY`, and `ENCRYPTION_KEY`; configure a unique `POSTGRES_PASSWORD` (never reuse the local default). Store secrets outside source control.
 2. Set `APP_ENV=production`, `DEBUG=false`, `COOKIE_SECURE=true`
 3. Add real `STRIPE_*` keys for billing
 4. Configure SMTP for emails
