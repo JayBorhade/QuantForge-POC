@@ -54,6 +54,11 @@ export function DashboardSidebar() {
     }
     wasMobileOpenRef.current = true;
     sidebarRef.current?.querySelector<HTMLElement>("[data-drawer-close]")?.focus();
+    const desktopQuery = window.matchMedia("(min-width: 768px)");
+    const onViewportChange = (event: MediaQueryListEvent) => {
+      if (event.matches) setMobileOpen(false);
+    };
+    desktopQuery.addEventListener("change", onViewportChange);
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setMobileOpen(false);
@@ -77,7 +82,10 @@ export function DashboardSidebar() {
       }
     };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      desktopQuery.removeEventListener("change", onViewportChange);
+    };
   }, [mobileOpen]);
 
   const signOut = async () => {
@@ -116,7 +124,7 @@ export function DashboardSidebar() {
         aria-modal={mobileOpen ? true : undefined}
         className={cn(
           "fixed left-0 top-0 z-50 flex h-dvh w-64 flex-col border-r border-white/5 bg-card/95 backdrop-blur-xl transition-transform duration-200 md:translate-x-0",
-          mobileOpen ? "translate-x-0" : "-translate-x-full"
+          mobileOpen ? "translate-x-0 visible" : "-translate-x-full invisible md:visible"
         )}
       >
         <div className="flex h-16 items-center justify-between gap-2 border-b border-white/5 px-6">
