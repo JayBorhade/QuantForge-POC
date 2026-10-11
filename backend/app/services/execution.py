@@ -9,7 +9,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.order import ExecutionMode, Order, OrderSide, OrderStatus, OrderType
-from app.brokers.base import BrokerOrderRequest, BrokerAdapter, BrokerSubmissionUnknown
+from app.brokers.base import BrokerOrderRequest, BrokerAdapter, BrokerSubmissionUnknown, BrokerSubmissionRejected
 from app.models.portfolio import Portfolio
 from app.models.user import User
 from app.services.risk import RiskRejected, RiskService
@@ -123,7 +123,12 @@ class ExecutionService:
             order.status = OrderStatus.SUBMITTED
             return order
 
-        order.status = OrderStatus.SUBMITTED
+        # Commit the idempotency key before any broker network call. If the
+        # process dies after the broker accepts the order, reconciliation still
+        # has a durable local order to match against.
+        await self.db.commit()
+        await self.db.refresh(order)
+
         try:
             result = await self.broker.submit_order(
                 BrokerOrderRequest(
@@ -164,8 +169,9 @@ class ExecutionService:
             # Return normally so the request/task transaction commits the
             # SUBMISSION_UNKNOWN record. Raising here would roll it back and
             # erase the only durable idempotency key after an ambiguous send.
+            await self.db.commit()
             return order
-        except Exception as exc:
+        except BrokerSubmissionRejected as exc:
             order.status = OrderStatus.FAILED
             order.rejection_reason = str(exc)[:512]
             await log_audit(
@@ -175,6 +181,22 @@ class ExecutionService:
                 resource_id=str(order.id),
                 details={"error": str(exc)[:512], "mode": order.mode.value},
             )
+            await self.db.commit()
             raise
+        except Exception as exc:
+            # Unexpected post-submit errors can happen after a provider accepted
+            # the request. Preserve the order as uncertain; never erase the
+            # idempotency key or pretend it definitely failed.
+            order.status = OrderStatus.SUBMISSION_UNKNOWN
+            order.rejection_reason = str(exc)[:512]
+            await log_audit(
+                self.db,
+                action="order.submission_unknown",
+                resource="order",
+                resource_id=str(order.id),
+                details={"error_type": type(exc).__name__, "mode": order.mode.value},
+            )
+            await self.db.commit()
+            return order
 
         return order
