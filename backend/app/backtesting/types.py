@@ -1,8 +1,10 @@
 """Typed domain objects for deterministic backtesting."""
+
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Mapping, Sequence
+
 
 @dataclass(frozen=True)
 class BacktestConfig:
@@ -11,12 +13,28 @@ class BacktestConfig:
     transaction_cost_pct: Decimal = Decimal("0.001")
     slippage_pct: Decimal = Decimal("0.0005")
     risk_free_rate: Decimal = Decimal("0.02")
+
     def validate(self) -> None:
-        if self.initial_capital <= 0: raise ValueError("initial_capital must be positive")
-        if not Decimal("0") < self.position_size_pct <= Decimal("1"): raise ValueError("position_size_pct must be in (0, 1]")
-        if not Decimal("0") <= self.transaction_cost_pct < Decimal("1"): raise ValueError("transaction_cost_pct must be in [0, 1)")
-        if not Decimal("0") <= self.slippage_pct < Decimal("1"): raise ValueError("slippage_pct must be in [0, 1)")
-        if self.risk_free_rate < 0: raise ValueError("risk_free_rate must be non-negative")
+        values = {
+            "initial_capital": self.initial_capital,
+            "position_size_pct": self.position_size_pct,
+            "transaction_cost_pct": self.transaction_cost_pct,
+            "slippage_pct": self.slippage_pct,
+            "risk_free_rate": self.risk_free_rate,
+        }
+        if any(not value.is_finite() for value in values.values()):
+            raise ValueError("backtest configuration values must be finite")
+        if self.initial_capital <= 0:
+            raise ValueError("initial_capital must be positive")
+        if not Decimal("0") < self.position_size_pct <= Decimal("1"):
+            raise ValueError("position_size_pct must be in (0, 1]")
+        if not Decimal("0") <= self.transaction_cost_pct < Decimal("1"):
+            raise ValueError("transaction_cost_pct must be in [0, 1)")
+        if not Decimal("0") <= self.slippage_pct < Decimal("1"):
+            raise ValueError("slippage_pct must be in [0, 1)")
+        if self.risk_free_rate < 0:
+            raise ValueError("risk_free_rate must be non-negative")
+
 
 @dataclass(frozen=True)
 class BacktestBar:
@@ -25,9 +43,18 @@ class BacktestBar:
     high: Decimal
     low: Decimal
     close: Decimal
+
     def validate(self) -> None:
-        if min(self.open, self.high, self.low, self.close) <= 0: raise ValueError("OHLC prices must be positive")
-        if self.high < max(self.open, self.close) or self.low > min(self.open, self.close): raise ValueError("invalid OHLC relationship")
+        if not isinstance(self.timestamp, datetime):
+            raise ValueError("bar timestamp must be a datetime")
+        prices = (self.open, self.high, self.low, self.close)
+        if any(not price.is_finite() for price in prices):
+            raise ValueError("OHLC prices must be finite")
+        if min(prices) <= 0:
+            raise ValueError("OHLC prices must be positive")
+        if self.high < max(self.open, self.close) or self.low > min(self.open, self.close):
+            raise ValueError("invalid OHLC relationship")
+
 
 @dataclass(frozen=True)
 class BacktestTrade:
@@ -39,6 +66,7 @@ class BacktestTrade:
     pnl: Decimal
     return_pct: Decimal
     reason: str
+
 
 @dataclass(frozen=True)
 class BacktestResult:
