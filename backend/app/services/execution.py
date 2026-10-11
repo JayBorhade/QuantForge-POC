@@ -22,6 +22,28 @@ class ExecutionService:
         self.db = db
         self.broker = broker
 
+    @staticmethod
+    def _matches_existing_request(
+        order: Order,
+        *,
+        symbol: str,
+        side: OrderSide,
+        quantity: Decimal,
+        mode: ExecutionMode,
+        strategy_id: UUID | None,
+        order_type: OrderType,
+        limit_price: Decimal | None,
+    ) -> bool:
+        return (
+            order.symbol == symbol.strip().upper()
+            and order.side is side
+            and order.quantity == quantity
+            and order.mode is mode
+            and order.strategy_id == strategy_id
+            and order.order_type is order_type
+            and order.limit_price == limit_price
+        )
+
     async def submit(
         self,
         *,
@@ -44,6 +66,8 @@ class ExecutionService:
                 raise ValueError(f"{label} must be finite and positive")
         if not symbol.strip():
             raise ValueError("Order symbol is required")
+        if not client_order_id or len(client_order_id) > 64:
+            raise ValueError("client_order_id must contain 1 to 64 characters")
         if mode is ExecutionMode.LIVE:
             if self.broker is None:
                 raise ValueError("Live execution requires an approved broker executor")
@@ -62,6 +86,11 @@ class ExecutionService:
         )
         duplicate = existing.scalar_one_or_none()
         if duplicate:
+            if not self._matches_existing_request(
+                duplicate, symbol=symbol, side=side, quantity=quantity, mode=mode,
+                strategy_id=strategy_id, order_type=order_type, limit_price=limit_price,
+            ):
+                raise ValueError("client_order_id has already been used for a different order")
             return duplicate
 
         risk_price = estimated_price if estimated_price is not None else limit_price
@@ -89,6 +118,11 @@ class ExecutionService:
         )
         existing_after_lock = duplicate_after_lock.scalar_one_or_none()
         if existing_after_lock is not None:
+            if not self._matches_existing_request(
+                existing_after_lock, symbol=symbol, side=side, quantity=quantity, mode=mode,
+                strategy_id=strategy_id, order_type=order_type, limit_price=limit_price,
+            ):
+                raise ValueError("client_order_id has already been used for a different order")
             return existing_after_lock
 
         try:
