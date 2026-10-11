@@ -28,6 +28,7 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
     setError("");
     try {
       await login(email, password, remember, needs2fa ? otp : undefined);
@@ -64,7 +65,7 @@ export default function LoginPage() {
           {needs2fa && (
             <div>
               <label htmlFor="login-otp" className="text-sm text-muted-foreground">2FA Code</label>
-              <Input id="login-otp" name="otp" inputMode="numeric" autoComplete="one-time-code" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\\D/g, "").slice(0, 6))} maxLength={6} className="mt-1" />
+              <Input id="login-otp" name="otp" inputMode="numeric" autoComplete="one-time-code" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))} maxLength={6} className="mt-1" />
             </div>
           )}
           <div className="flex items-center justify-between text-sm">
