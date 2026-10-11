@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import Script from "next/script";
 import { ProductUxControls } from "@/components/layout/product-ux-controls";
 import "./globals.css";
 
@@ -35,7 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        <Script id="quantforge-theme-init" strategy="beforeInteractive">{themeInitScript}</Script>
       </head>
       <body className={`${inter.variable} ${mono.variable} font-sans`}>
         <ProductUxControls />
