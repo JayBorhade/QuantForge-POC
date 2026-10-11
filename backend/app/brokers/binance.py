@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 
 import httpx
 
-from app.brokers.base import BrokerOrderRequest, BrokerOrderResult, BrokerSubmissionUnknown
+from app.brokers.base import BrokerOrderRequest, BrokerOrderResult, BrokerSubmissionUnknown, BrokerSubmissionRejected
 from app.models.order import OrderType
 
 
@@ -84,9 +84,17 @@ class BinanceBrokerAdapter:
                 )
         except httpx.TransportError as exc:
             raise BrokerSubmissionUnknown(f"Binance submission transport outcome is unknown: {exc}") from exc
+        if response.status_code >= 500:
+            raise BrokerSubmissionUnknown(
+                f"Binance returned HTTP {response.status_code}; order outcome is unknown"
+            )
         data = response.json()
-        if response.status_code >= 400 or "orderId" not in data:
-            raise RuntimeError(data.get("msg") or f"Binance order failed ({response.status_code})")
+        if response.status_code >= 400:
+            raise BrokerSubmissionRejected(
+                data.get("msg") or f"Binance rejected the order ({response.status_code})"
+            )
+        if "orderId" not in data:
+            raise BrokerSubmissionUnknown("Binance response omitted order id; submission outcome is unknown")
         executed_qty = Decimal(str(data.get("executedQty", "0")))
         cumulative_quote = Decimal(str(data.get("cummulativeQuoteQty", "0")))
         average_price = (cumulative_quote / executed_qty) if executed_qty > 0 else None
