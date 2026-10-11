@@ -31,6 +31,7 @@ export function ProductUxControls() {
   const [showTop, setShowTop] = useState(false);
   const [progress, setProgress] = useState(0);
   const isMarketing = !pathname.startsWith("/dashboard") && pathname !== "/admin";
+  const hasReadingProgress = pathname === "/docs" || pathname.startsWith("/blog/");
 
   useEffect(() => {
     const stored = window.localStorage.getItem("quantforge-theme");
@@ -43,24 +44,18 @@ export function ProductUxControls() {
   }, []);
 
   useEffect(() => {
-    const onScroll = () => {\n      setShowTop(window.scrollY > 480);\n      const max = document.documentElement.scrollHeight - window.innerHeight;\n      setProgress(max > 0 ? Math.min(100, Math.max(0, (window.scrollY / max) * 100)) : 0);\n    };
+    const onScroll = () => {
+      setShowTop(window.scrollY > 480);
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      setProgress(max > 0 ? Math.min(100, Math.max(0, (window.scrollY / max) * 100)) : 0);
+    };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const allowed = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"];
-    const current = Object.fromEntries(
-      allowed.flatMap((key) => {
-        const value = params.get(key)?.trim();
-        return value && value.length <= 200 ? [[key, value]] : [];
-      })
-    );
-    if (Object.keys(current).length && !window.sessionStorage.getItem("quantforge-utm-first-touch")) {
-      window.sessionStorage.setItem("quantforge-utm-first-touch", JSON.stringify(current));
-    }
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
   }, [pathname]);
 
   useEffect(() => {
@@ -88,26 +83,36 @@ export function ProductUxControls() {
     window.localStorage.setItem("quantforge-theme", next);
   };
 
+  const contentTarget = pathname.startsWith("/dashboard") ? "#dashboard-main-content" : "#page-content";
+
   return (
     <>
-      <a href={pathname.startsWith("/dashboard") ? "#dashboard-main-content" : "#page-content"} className="skip-link" onClick={(event) => {\n        const target = document.querySelector(pathname.startsWith("/dashboard") ? "#dashboard-main-content" : "#page-content");\n        if (target instanceof HTMLElement) { event.preventDefault(); target.focus(); target.scrollIntoView({ block: "start" }); }\n      }}>Skip to content</a>\n      {(pathname === "/docs" || pathname.startsWith("/blog/")) && (\n        <div className="fixed left-0 right-0 top-0 z-[110] h-1 bg-transparent" role="progressbar" aria-label="Reading progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress)}>\n          <div className="h-full bg-primary transition-[width] duration-100" style={{ width: `${progress}%` }} />\n        </div>\n      )}
+      <a
+        href={contentTarget}
+        className="skip-link"
+        onClick={(event) => {
+          const target = document.querySelector(contentTarget);
+          if (target instanceof HTMLElement) {
+            event.preventDefault();
+            target.focus();
+            target.scrollIntoView({ block: "start" });
+          }
+        }}
+      >
+        Skip to content
+      </a>
+
+      {hasReadingProgress && (
+        <div className="fixed left-0 right-0 top-0 z-[110] h-1 bg-transparent" role="progressbar" aria-label="Reading progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress)}>
+          <div className="h-full bg-primary transition-[width] duration-100" style={{ width: `${progress}%` }} />
+        </div>
+      )}
+
       <div className="fixed right-4 top-20 z-[60] flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => { setSearchOpen(true); setQuery(""); }}
-          aria-label="Search site"
-          title="Search site"
-          className="ux-icon-button"
-        >
+        <button type="button" onClick={() => { setSearchOpen(true); setQuery(""); }} aria-label="Search site" title="Search site" className="ux-icon-button">
           <Search aria-hidden="true" className="h-4 w-4" />
         </button>
-        <button
-          type="button"
-          onClick={toggleTheme}
-          aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-          title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-          className="ux-icon-button"
-        >
+        <button type="button" onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} className="ux-icon-button">
           {theme === "dark" ? <Sun aria-hidden="true" className="h-4 w-4" /> : <Moon aria-hidden="true" className="h-4 w-4" />}
         </button>
       </div>
@@ -118,15 +123,8 @@ export function ProductUxControls() {
             <div className="flex items-center gap-3">
               <Search aria-hidden="true" className="h-5 w-5 text-muted-foreground" />
               <h2 id="site-search-title" className="sr-only">Search QuantForge</h2>
-              <input
-                autoFocus
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search pages and features…"
-                aria-label="Search pages and features"
-                className="min-w-0 flex-1 bg-transparent py-2 text-sm outline-none"
-              />
-              <button type="button" className="ux-icon-button" aria-label="Close search" onClick={() => setSearchOpen(false)}><X className="h-4 w-4" /></button>
+              <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search pages and features…" aria-label="Search pages and features" className="min-w-0 flex-1 bg-transparent py-2 text-sm outline-none" />
+              <button type="button" className="ux-icon-button" aria-label="Close search" onClick={() => setSearchOpen(false)}><X aria-hidden="true" className="h-4 w-4" /></button>
             </div>
             <div className="mt-3 max-h-[55vh] overflow-y-auto" aria-live="polite">
               {results.length ? results.map((page) => (
@@ -136,19 +134,13 @@ export function ProductUxControls() {
                 </Link>
               )) : <p className="px-3 py-6 text-sm text-muted-foreground">No matching pages. Try a different search term.</p>}
             </div>
-            <p className="mt-2 border-t border-border pt-3 text-xs text-muted-foreground">Searches public pages and known app destinations. Private records are not indexed.</p>
+            <p className="mt-2 border-t border-border pt-3 text-xs text-muted-foreground">Searches known application pages and features. Private records are not indexed.</p>
           </section>
         </div>
       )}
 
       {showTop && (
-        <button
-          type="button"
-          className={`fixed bottom-5 right-5 z-40 ux-icon-button shadow-lg ${isMarketing ? "bottom-20" : ""}`}
-          aria-label="Back to top"
-          title="Back to top"
-          onClick={() => window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })}
-        >
+        <button type="button" className={`fixed bottom-5 right-5 z-40 ux-icon-button shadow-lg ${isMarketing ? "bottom-20" : ""}`} aria-label="Back to top" title="Back to top" onClick={() => window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })}>
           <ArrowUp aria-hidden="true" className="h-4 w-4" />
         </button>
       )}
@@ -157,14 +149,6 @@ export function ProductUxControls() {
         <Link href="/contact" className="fixed bottom-5 right-5 z-30 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-card px-4 py-3 text-sm font-medium shadow-lg hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           Contact <ExternalLink aria-hidden="true" className="h-4 w-4" />
         </Link>
-      )}
-
-      {consentNotice && (
-        <div className="fixed bottom-4 left-4 z-[80] max-w-sm rounded-xl border border-border bg-card p-4 shadow-xl" role="status">
-          <p className="text-sm font-medium">Privacy preferences</p>
-          <p className="mt-1 text-xs text-muted-foreground">This app currently uses essential session/security cookies only. No optional analytics service is configured here.</p>
-          <button type="button" onClick={() => setConsentNotice(false)} className="mt-3 text-sm text-primary underline">Dismiss</button>
-        </div>
       )}
     </>
   );
