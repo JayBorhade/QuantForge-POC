@@ -1,7 +1,7 @@
 """Regression tests for tenant-scoped portfolio and strategy lookups."""
 import unittest
 import uuid
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 from fastapi import HTTPException
 
@@ -14,7 +14,7 @@ class ResourceOwnershipGuardTests(unittest.IsolatedAsyncioTestCase):
         resource_id = uuid.uuid4()
         owner_id = uuid.uuid4()
         db = AsyncMock()
-        result = AsyncMock()
+        result = MagicMock()
         result.scalar_one_or_none.return_value = None
         db.execute.return_value = result
 
