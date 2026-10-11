@@ -22,13 +22,28 @@ export default function StrategiesPage() {
   const [symbol, setSymbol] = useState("");
   const [strategyType, setStrategyType] = useState(STRATEGY_TYPES[0].value);
   const [saving, setSaving] = useState(false);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [message, setMessage] = useState("");
 
-  const load = () => strategyApi.list().then((r) => setStrategies(r.data)).catch(() => setStrategies([]));
+  const load = async () => {
+    setLoading(true);
+    try {
+      const response = await strategyApi.list();
+      setStrategies(Array.isArray(response.data) ? response.data : []);
+      setLoadError("");
+    } catch {
+      setLoadError("Strategies could not be loaded. Check your connection and retry.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { void load(); }, []);
 
   const createStrategy = async () => {
+    if (saving) return;
     if (!name.trim() || !symbol.trim()) {
       setMessage("Name and symbol are required.");
       return;
@@ -46,19 +61,44 @@ export default function StrategiesPage() {
       setName("");
       setSymbol("");
       await load();
-      setMessage("Paper strategy created.");
+      setMessage("Paper strategy created successfully.");
     } catch {
-      setMessage("Could not create the strategy.");
+      setMessage("Could not create the strategy. Check the fields and try again.");
     } finally {
       setSaving(false);
     }
   };
 
   const start = async (id: string) => {
-    try { await strategyApi.start(id); await load(); } catch { setMessage("Could not start strategy."); }
+    if (pendingAction) return;
+    setPendingAction(`start:${id}`);
+    setMessage("");
+    try {
+      await strategyApi.start(id);
+      await load();
+      setMessage("Strategy start request completed.");
+    } catch {
+      setMessage("Could not start strategy. Verify its configuration and status.");
+    } finally {
+      setPendingAction(null);
+    }
   };
-  const stop = async (id: string) => {
-    try { await strategyApi.stop(id); await load(); } catch { setMessage("Could not stop strategy."); }
+
+  const stop = async (id: string, strategyName: string) => {
+    if (pendingAction) return;
+    const confirmed = window.confirm(`Stop strategy "${strategyName}"? The server will receive a stop request.`);
+    if (!confirmed) return;
+    setPendingAction(`stop:${id}`);
+    setMessage("");
+    try {
+      await strategyApi.stop(id);
+      await load();
+      setMessage("Strategy stop request completed.");
+    } catch {
+      setMessage("Could not stop strategy. Check its current status and try again.");
+    } finally {
+      setPendingAction(null);
+    }
   };
 
   return (
@@ -70,48 +110,51 @@ export default function StrategiesPage() {
 
       <Card className="p-6">
         <h2 className="mb-4 font-semibold">Create paper strategy</h2>
-        <div className="grid gap-4 md:grid-cols-3">
-          <Input aria-label="Strategy name" placeholder="Strategy name" value={name} onChange={(e) => setName(e.target.value)} />
-          <Input aria-label="Symbol" placeholder="Symbol, e.g. AAPL" value={symbol} onChange={(e) => setSymbol(e.target.value)} />
-          <select
-            aria-label="Strategy type"
-            className="h-10 rounded-lg border border-border bg-secondary/50 px-3 text-sm"
-            value={strategyType}
-            onChange={(e) => setStrategyType(e.target.value)}
-          >
-            {STRATEGY_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
-          </select>
-        </div>
-        <Button className="mt-4" onClick={createStrategy} disabled={saving}>
-          {saving ? "Creating..." : "Create Strategy"}
-        </Button>
-        {message && <p className="mt-3 text-sm text-muted-foreground">{message}</p>}
+        <form onSubmit={(event) => { event.preventDefault(); void createStrategy(); }}>
+          <div className="grid gap-4 md:grid-cols-3">
+            <Input aria-label="Strategy name" placeholder="Strategy name" value={name} onChange={(e) => setName(e.target.value)} required />
+            <Input aria-label="Symbol" placeholder="Symbol, e.g. AAPL" value={symbol} onChange={(e) => setSymbol(e.target.value)} required />
+            <select aria-label="Strategy type" className="h-10 rounded-lg border border-border bg-secondary/50 px-3 text-sm" value={strategyType} onChange={(e) => setStrategyType(e.target.value)}>
+              {STRATEGY_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+            </select>
+          </div>
+          <Button type="submit" className="mt-4" disabled={saving}>{saving ? "Creating…" : "Create Strategy"}</Button>
+        </form>
+        {message && <p className="mt-3 text-sm text-muted-foreground" role="status" aria-live="polite">{message}</p>}
       </Card>
 
+      {loadError && <div className="rounded-lg border border-red-500/30 p-4 text-sm text-red-500" role="alert">{loadError} <button type="button" className="ml-2 underline" onClick={() => void load()}>Retry</button></div>}
+
       <div className="grid gap-4 md:grid-cols-2">
-        {strategies.length === 0 ? (
-          <Card className="p-8 text-center text-muted-foreground col-span-2">No strategies yet.</Card>
-        ) : strategies.map((s) => (
-          <Card key={s.id} className="glass-hover p-6">
-            <div className="flex justify-between">
+        {loading ? (
+          <Card className="col-span-2 p-8 text-center text-muted-foreground" role="status">Loading strategies…</Card>
+        ) : !loadError && strategies.length === 0 ? (
+          <Card className="col-span-2 p-8 text-center text-muted-foreground">No strategies yet.</Card>
+        ) : strategies.map((strategy) => (
+          <Card key={strategy.id} className="glass-hover p-6">
+            <div className="flex justify-between gap-4">
               <div>
-                <h3 className="font-semibold">{s.name}</h3>
-                <p className="text-sm text-muted-foreground">{s.symbol} · {s.strategy_type}</p>
+                <h3 className="font-semibold">{strategy.name}</h3>
+                <p className="text-sm text-muted-foreground">{strategy.symbol} · {strategy.strategy_type}</p>
               </div>
-              <span className="rounded-full bg-primary/20 px-2 py-0.5 text-xs text-primary capitalize">{s.status}</span>
+              <span className="h-fit rounded-full bg-primary/20 px-2 py-0.5 text-xs text-primary capitalize">{strategy.status}</span>
             </div>
             <div className="mt-4 flex gap-2">
-              <Button size="sm" onClick={() => start(s.id)} disabled={s.status === "active"}>Start</Button>
-              <Button size="sm" variant="outline" onClick={() => stop(s.id)} disabled={s.status === "stopped"}>Stop</Button>
+              <Button size="sm" onClick={() => void start(strategy.id)} disabled={Boolean(pendingAction) || strategy.status === "active"}>
+                {pendingAction === `start:${strategy.id}` ? "Starting…" : "Start"}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => void stop(strategy.id, strategy.name)} disabled={Boolean(pendingAction) || strategy.status === "stopped"}>
+                {pendingAction === `stop:${strategy.id}` ? "Stopping…" : "Stop"}
+              </Button>
             </div>
           </Card>
         ))}
       </div>
 
       <Card className="p-6">
-        <h3 className="font-semibold mb-4">Available Algorithms</h3>
+        <h3 className="mb-4 font-semibold">Available Algorithms</h3>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {STRATEGY_TYPES.map((t) => <div key={t.value} className="rounded-lg bg-secondary/50 px-4 py-3 text-sm">{t.label}</div>)}
+          {STRATEGY_TYPES.map((type) => <div key={type.value} className="rounded-lg bg-secondary/50 px-4 py-3 text-sm">{type.label}</div>)}
         </div>
       </Card>
     </div>
