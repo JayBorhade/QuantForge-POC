@@ -189,6 +189,20 @@ class AuthService:
         return new_access, new_refresh
 
     @staticmethod
+    async def revoke_sessions(db: AsyncSession, user_id: uuid.UUID) -> int:
+        """Revoke every active refresh session for a user after a credential reset."""
+        result = await db.execute(
+            select(UserSession).where(
+                UserSession.user_id == user_id,
+                UserSession.is_active == True,
+            )
+        )
+        sessions = list(result.scalars().all())
+        for session in sessions:
+            session.is_active = False
+        return len(sessions)
+
+    @staticmethod
     async def logout(db: AsyncSession, user_id: uuid.UUID, jti: Optional[str] = None) -> None:
         query = select(UserSession).where(
             UserSession.user_id == user_id,
