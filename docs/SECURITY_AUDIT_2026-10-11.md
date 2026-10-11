@@ -14,7 +14,7 @@ PR #54 contains substantial hardening changes, but it remains unmerged. The curr
 
 Highest-priority remaining gates:
 1. PostgreSQL row-level security is not implemented.
-2. TOTP/MFA seeds remain plaintext in the database; encrypt them with a reviewed migration and safe legacy-data handling.
+2. The existing main branch stores TOTP/MFA seeds in plaintext. PR #54 now includes an encryption helper and Alembic data migration; this proposed migration must pass CI and be applied with the correct ENCRYPTION_KEY in staging before the risk can be considered closed.
 3. Route-by-route IDOR/BOLA adversarial tests are not complete.
 4. Stripe signature/replay/idempotency, Redis-backed rate limits, cookie/proxy/TLS, SMTP, and broker flows require staging validation.
 5. Security/dependency CI reported by the PR should be re-run against the final merged commit; full npm audit has a documented development-tooling residual.
@@ -32,7 +32,7 @@ Highest-priority remaining gates:
 | 7 | Insecure JWT secrets/algorithm | Main accepts configured algorithm and contains development defaults; PR #54 constrains JWT to HS256 and validates distinct high-entropy non-placeholder production secrets. | **Fix proposed, not on main** — rotate any exposed secrets and verify production config fails closed. |
 | 8 | Exposed API secrets | .env is ignored and examples use placeholders; PR #54 adds randomized local launcher secrets and removes raw provider error responses. | **Partial** — scan all history and artifacts for credentials; rotate anything ever committed. Inject production secrets via a secret manager/environment and never expose them to frontend variables. |
 | 9 | Weak password hashing | Main uses direct bcrypt; PR #54 uses SHA-256 pre-hashing plus bcrypt to avoid 72-byte truncation and upgrades legacy bcrypt hashes after successful login. | **Fix proposed, not on main** — validate migration/rehash behavior and password-reset/session-revocation tests. |
-| 10 | Missing MFA | TOTP support exists; PR #54 requires MFA for admin routes. | **Partial** — admin enforcement is proposed; ordinary-user MFA is opt-in. TOTP seeds are plaintext in the database and must be encrypted before production. |
+| 10 | Missing MFA | TOTP support exists; PR #54 requires MFA for admin routes. This branch now adds version-marked encryption for new TOTP seeds and a data migration for existing values. | **Partial** — admin enforcement is proposed; ordinary-user MFA is opt-in. Validate the migration with the deployment encryption key and test existing MFA accounts in staging. |
 | 11 | Overly permissive CORS | Main allows all methods and headers. PR #54 uses explicit method/header allowlists and configured origins. | **Confirmed on main; fix proposed** — verify exact deployed origin list and ensure credentials are never combined with wildcard origins. |
 | 12 | Auth tokens in local storage | The reviewed frontend API uses credentialed cookies and reads only the CSRF cookie; PR #54 removes access tokens from JSON responses and refreshes only from HttpOnly cookies. | **Fix proposed / verify whole frontend** — search all frontend storage and network paths for access/refresh tokens, and confirm cookies are Secure in production. |
 | 13 | Client-side-only permission enforcement | Backend auth/verified-user/admin dependencies exist; PR #54 adds admin MFA enforcement. | **Baseline present; route coverage open** — test protected APIs directly without the UI, including WebSockets and all admin/financial actions. |
@@ -48,7 +48,7 @@ Highest-priority remaining gates:
 
 - [ ] Merge/review the proposed security changes only after the open release gates are addressed or explicitly risk-accepted.
 - [ ] Add PostgreSQL RLS migration(s), tenant context management, and tests for API/background/admin contexts.
-- [ ] Encrypt existing and new TOTP seeds with a separate encryption key; provide a reversible migration/rollout and recovery plan.
+- [ ] Verify the TOTP encryption migration in CI/staging using the deployment encryption key; confirm rollback/recovery and existing MFA-account login.
 - [ ] Complete two-user IDOR/BOLA regression coverage for every sensitive resource and WebSocket.
 - [ ] Run backend tests, frontend lint/typecheck/build, Docker production build, CodeQL, pip-audit, and npm audit on the final candidate commit.
 - [ ] Validate Stripe webhook signatures/idempotency and Redis rate limiting in staging.
