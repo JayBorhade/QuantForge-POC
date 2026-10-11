@@ -18,15 +18,41 @@ class StrategyCreate(BaseModel):
     parameters: Dict[str, Any] = Field(default_factory=dict)
     is_paper: bool = True
     schedule_cron: Optional[str] = None
+    schedule_portfolio_id: Optional[UUID] = None
+
+    @field_validator("schedule_cron")
+    @classmethod
+    def validate_schedule_cron(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        return validate_cron_expression(value)
+
+    @model_validator(mode="after")
+    def validate_schedule_configuration(self):
+        if self.schedule_cron and self.schedule_portfolio_id is None:
+            raise ValueError("schedule_portfolio_id is required when schedule_cron is set")
+        if self.schedule_portfolio_id is not None and not self.schedule_cron:
+            raise ValueError("schedule_cron is required when schedule_portfolio_id is set")
+        if self.schedule_cron and not self.is_paper:
+            raise ValueError("Scheduled strategies must use paper mode")
+        return self
 
 
 class StrategyUpdate(BaseModel):
-    name: Optional[str] = None
+    name: Optional[str] = Field(default=None, min_length=1, max_length=128)
     description: Optional[str] = None
     parameters: Optional[Dict[str, Any]] = None
     status: Optional[StrategyStatus] = None
     is_paper: Optional[bool] = None
     schedule_cron: Optional[str] = None
+    schedule_portfolio_id: Optional[UUID] = None
+
+    @field_validator("schedule_cron")
+    @classmethod
+    def validate_schedule_cron(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        return validate_cron_expression(value)
 
 
 class StrategyResponse(BaseModel):
