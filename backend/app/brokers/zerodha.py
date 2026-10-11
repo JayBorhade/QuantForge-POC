@@ -40,8 +40,14 @@ class ZerodhaBrokerAdapter:
             return "rejected"
         if status in {"OPEN", "OPEN PENDING", "VALIDATION PENDING", "PUT ORDER REQ RECEIVED"}:
             return "submitted"
-        return "submitted"
-
+        if status in {
+            "OPEN", "OPEN PENDING", "VALIDATION PENDING",
+            "PUT ORDER REQ RECEIVED", "AMO REQ RECEIVED",
+            "TRIGGER PENDING", "MODIFY PENDING", "CANCEL PENDING",
+        }:
+            return "submitted"
+        raise ValueError("Unsupported Zerodha order status")
+    
     async def connect(self) -> bool:
         try:
             async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
