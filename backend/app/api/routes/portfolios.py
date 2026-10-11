@@ -82,6 +82,16 @@ async def list_portfolios(current_user: CurrentUser, db: DbSession):
 
 @router.post("", response_model=PortfolioResponse, status_code=status.HTTP_201_CREATED)
 async def create_portfolio(data: PortfolioCreate, current_user: CurrentUser, db: DbSession):
+    from app.services.plan_limits import count_user_resource, get_effective_limits
+
+    limits = await get_effective_limits(db, current_user.id)
+    portfolio_count = await count_user_resource(db, current_user.id, "portfolios")
+    if portfolio_count >= limits.portfolios:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Portfolio limit reached for the current plan",
+        )
+
     portfolio = Portfolio(
         user_id=current_user.id,
         name=data.name,
