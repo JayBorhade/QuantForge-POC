@@ -184,17 +184,25 @@ async def stripe_webhook(request: Request, db: DbSession):
 
     obj = event["data"]
 
-    if event_type == "checkout.session.completed":
+    if event_type in {"checkout.session.completed", "checkout.session.async_payment_succeeded"}:
         user_id = obj.get("metadata", {}).get("user_id")
-        plan = obj.get("metadata", {}).get("plan", "starter")
+        plan = obj.get("metadata", {}).get("plan")
         customer_id = obj.get("customer")
-        if user_id:
+        subscription_id = obj.get("subscription")
+        payment_eligible = obj.get("payment_status") in {"paid", "no_payment_required"}
+        if (
+            user_id
+            and plan in PLAN_CONFIG
+            and customer_id
+            and subscription_id
+            and payment_eligible
+        ):
             await _update_subscription(
                 db,
                 uuid.UUID(user_id),
                 plan,
                 customer_id,
-                obj.get("subscription"),
+                subscription_id,
                 SubscriptionStatus.ACTIVE,
             )
 
@@ -202,10 +210,16 @@ async def stripe_webhook(request: Request, db: DbSession):
         customer_id = obj.get("customer")
         status_map = {
             "active": SubscriptionStatus.ACTIVE,
+            "trialing": SubscriptionStatus.TRIAL,
             "canceled": SubscriptionStatus.CANCELLED,
             "past_due": SubscriptionStatus.EXPIRED,
+            "unpaid": SubscriptionStatus.EXPIRED,
+            "incomplete": SubscriptionStatus.EXPIRED,
+            "incomplete_expired": SubscriptionStatus.EXPIRED,
+            "paused": SubscriptionStatus.EXPIRED,
         }
-        sub_status = status_map.get(obj.get("status"), SubscriptionStatus.ACTIVE)
+        # Unknown provider states must never grant paid entitlements.
+        sub_status = status_map.get(obj.get("status"), SubscriptionStatus.EXPIRED)
         price_id = obj.get("items", {}).get("data", [{}])[0].get("price", {}).get("id")
         plan = map_stripe_plan(price_id)
         result = await db.execute(
