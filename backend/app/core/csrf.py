@@ -15,7 +15,6 @@ CSRF_HEADER = "X-CSRF-Token"
 CSRF_EXEMPT_SUFFIXES = frozenset({
     "/auth/login",
     "/auth/signup",
-    "/auth/refresh",
     "/auth/forgot-password",
     "/auth/resend-verification",
     "/auth/reset-password",
