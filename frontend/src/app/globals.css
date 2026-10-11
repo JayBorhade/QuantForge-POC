@@ -137,10 +137,6 @@ html:not(.dark) .border-white\/10 {
   border-color: hsl(var(--border));
 }
 
-html:not(.dark) .text-white {
-  color: hsl(var(--foreground));
-}
-
 html:not(.dark) .text-white\/70 {
   color: hsl(var(--muted-foreground));
 }
@@ -184,8 +180,6 @@ html:not(.dark) .bg-card\/40 {
     display: none !important;
   }
 
-  main,
-  article,
   section,
   .glass,
   .card {
