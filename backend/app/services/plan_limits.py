@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.portfolio import Portfolio
 from app.models.strategy import Strategy
 from app.models.subscription import PlanTier, Subscription, SubscriptionStatus
+from app.models.user import User
 
 
 @dataclass(frozen=True)
@@ -44,12 +45,15 @@ async def get_effective_limits(db: AsyncSession, user_id) -> ResourceLimits:
 
 
 async def count_user_resource(db: AsyncSession, user_id, resource: str) -> int:
-    """Count one of the supported per-user resource types."""
+    """Lock the owner row before counting so concurrent creates cannot exceed a cap."""
+    if resource not in {"strategies", "portfolios"}:
+        raise ValueError("Unsupported resource type")
+    await db.execute(
+        select(User.id).where(User.id == user_id).with_for_update()
+    )
     if resource == "strategies":
         statement = select(func.count(Strategy.id)).where(Strategy.user_id == user_id)
     elif resource == "portfolios":
         statement = select(func.count(Portfolio.id)).where(Portfolio.user_id == user_id)
-    else:
-        raise ValueError("Unsupported resource type")
     result = await db.execute(statement)
     return int(result.scalar_one())
