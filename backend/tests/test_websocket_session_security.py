@@ -4,8 +4,9 @@ import asyncio
 import unittest
 import uuid
 from unittest.mock import AsyncMock, patch
+from types import SimpleNamespace
 
-from app.api.routes.websocket import ConnectionManager, _session_is_active
+from app.api.routes.websocket import ConnectionManager, _session_is_active, websocket_endpoint
 
 
 class Result:
@@ -28,6 +29,22 @@ class SessionContext:
 
 
 class WebSocketSessionSecurityTests(unittest.TestCase):
+
+    def test_websocket_rejects_missing_origin(self):
+        websocket = SimpleNamespace(headers={}, cookies={}, close=AsyncMock())
+        asyncio.run(websocket_endpoint(websocket))
+        websocket.close.assert_awaited_once_with(code=4403, reason="Origin not allowed")
+
+    def test_websocket_requires_access_cookie_even_if_query_token_could_exist(self):
+        websocket = SimpleNamespace(
+            headers={"origin": "https://app.quantforge.example"},
+            cookies={},
+            close=AsyncMock(),
+        )
+        with patch("app.api.routes.websocket.settings", SimpleNamespace(cors_origins=["https://app.quantforge.example"])):
+            asyncio.run(websocket_endpoint(websocket))
+        websocket.close.assert_awaited_once_with(code=4001, reason="Authentication required")
+
     def test_connection_manager_rejects_connections_over_per_user_limit(self):
         async def scenario():
             manager = ConnectionManager()
