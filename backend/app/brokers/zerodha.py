@@ -63,7 +63,7 @@ class ZerodhaBrokerAdapter:
         exchange = params.get("exchange")
         product = params.get("product")
         if not exchange or not product:
-            raise ValueError("Zerodha order requires broker_params.exchange and broker_params.product")
+            raise BrokerSubmissionRejected("Zerodha order requires broker_params.exchange and broker_params.product")
 
         payload: dict[str, Any] = {
             "tradingsymbol": request.symbol,
@@ -76,7 +76,7 @@ class ZerodhaBrokerAdapter:
         }
         if request.order_type is OrderType.LIMIT:
             if request.limit_price is None:
-                raise ValueError("Zerodha LIMIT order requires limit_price")
+                raise BrokerSubmissionRejected("Zerodha LIMIT order requires limit_price")
             payload["price"] = str(request.limit_price)
         if params.get("market_protection") is not None:
             payload["market_protection"] = params["market_protection"]
