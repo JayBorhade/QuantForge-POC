@@ -29,7 +29,7 @@ export function ProductUxControls() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [showTop, setShowTop] = useState(false);
-  const [consentNotice, setConsentNotice] = useState(false);
+  const [progress, setProgress] = useState(0);
   const isMarketing = !pathname.startsWith("/dashboard") && pathname !== "/admin";
 
   useEffect(() => {
@@ -43,7 +43,7 @@ export function ProductUxControls() {
   }, []);
 
   useEffect(() => {
-    const onScroll = () => setShowTop(window.scrollY > 480);
+    const onScroll = () => {\n      setShowTop(window.scrollY > 480);\n      const max = document.documentElement.scrollHeight - window.innerHeight;\n      setProgress(max > 0 ? Math.min(100, Math.max(0, (window.scrollY / max) * 100)) : 0);\n    };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -90,7 +90,7 @@ export function ProductUxControls() {
 
   return (
     <>
-      <a href="#main-content" className="skip-link">Skip to content</a>
+      <a href={pathname.startsWith("/dashboard") ? "#dashboard-main-content" : "#page-content"} className="skip-link" onClick={(event) => {\n        const target = document.querySelector(pathname.startsWith("/dashboard") ? "#dashboard-main-content" : "#page-content");\n        if (target instanceof HTMLElement) { event.preventDefault(); target.focus(); target.scrollIntoView({ block: "start" }); }\n      }}>Skip to content</a>\n      {(pathname === "/docs" || pathname.startsWith("/blog/")) && (\n        <div className="fixed left-0 right-0 top-0 z-[110] h-1 bg-transparent" role="progressbar" aria-label="Reading progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress)}>\n          <div className="h-full bg-primary transition-[width] duration-100" style={{ width: `${progress}%` }} />\n        </div>\n      )}
       <div className="fixed right-4 top-20 z-[60] flex items-center gap-2">
         <button
           type="button"
