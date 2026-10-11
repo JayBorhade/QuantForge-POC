@@ -18,27 +18,45 @@ interface Trade {
 }
 
 export default function LiveTradingPage() {
-  const [trades, setTrades] = useState<Trade[]>([]);
+  const [trades, setTrades] = useState<Trade[]>([]);\n  const [loading, setLoading] = useState(true);\n  const [error, setError] = useState("");
   const { connected, lastMessage } = useWebSocket();
 
   useEffect(() => {
-    dashboardApi.recentTrades().then((r) => setTrades(r.data)).catch(() => setTrades([]));
-    const interval = setInterval(() => {
-      dashboardApi.recentTrades().then((r) => setTrades(r.data)).catch(() => {});
-    }, 10000);
-    return () => clearInterval(interval);
+    let mounted = true;
+    const loadTrades = async () => {
+      try {
+        const response = await dashboardApi.recentTrades();
+        if (mounted) {
+          setTrades(Array.isArray(response.data) ? response.data : []);
+          setError("");
+        }
+      } catch {
+        if (mounted) {
+          setTrades([]);
+          setError("Trade data could not be loaded. Check the API connection and retry.");
+        }
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    void loadTrades();
+    const interval = window.setInterval(() => void loadTrades(), 10000);
+    return () => {
+      mounted = false;
+      window.clearInterval(interval);
+    };
   }, []);
 
   return (
     <div>
       <DashboardHeader title="Live Trading Panel" subtitle="Real-time positions and execution feed" />
-      <div className="mb-4 flex items-center gap-2">
+      {error && <p className="mb-4 rounded-lg border border-red-500/30 p-3 text-sm text-red-500" role="alert">{error}</p>}\n      <div className="mb-4 flex items-center gap-2" aria-live="polite">
         <span className="relative flex h-3 w-3">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
           <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500" />
         </span>
         <span className="text-sm text-emerald-400">
-          {connected ? "WebSocket connected" : "Connecting..."}
+          {connected ? "WebSocket connected" : "WebSocket disconnected"}
         </span>
         {lastMessage?.type === "trade" && (
           <span className="text-xs text-muted-foreground ml-4">Last event: trade</span>
@@ -47,7 +65,7 @@ export default function LiveTradingPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="p-6">
           <h3 className="font-semibold mb-4">Open Positions</h3>
-          {trades.filter((t) => t.status === "open").length === 0 ? (
+          {loading ? <p className="text-sm text-muted-foreground" role="status">Loading positions…</p> : error ? <p className="text-sm text-muted-foreground">Position data unavailable.</p> : trades.filter((t) => t.status === "open").length === 0 ? (
             <p className="text-sm text-muted-foreground">No open positions</p>
           ) : (
             trades.filter((t) => t.status === "open").map((t) => (
