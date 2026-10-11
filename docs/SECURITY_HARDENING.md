@@ -25,7 +25,7 @@ This document records source-level controls added during the security-hardening 
 | Source maps | Next production browser source maps are explicitly disabled. | Implemented; inspect deployed artifacts/CDN after build. |
 | Default credentials | Local Compose service ports bind to loopback; production Compose requires explicit database credentials. Local launchers generate random secrets. | Implemented baseline; change any reused credentials and keep production services private. |
 | Sensitive logs | Billing failures return generic client errors rather than raw provider exception text; request logs avoid bodies and tokens. | Implemented baseline; inspect provider logs and audit-log retention in staging. |
-| Vulnerable dependencies | Replaced python-jose 3.3.0 with PyJWT 2.15.1; raised Next.js/React minimum versions to patched security releases; updated FastAPI/Starlette, python-multipart, bleach, cryptography, aiosmtplib, Jinja2, python-dotenv, and aiohttp based on dependency audit findings. CodeQL, Dependabot, pip-audit, and npm audit are configured. | Audit jobs must pass and dependency update PRs must be reviewed before release. |
+| Vulnerable dependencies | Replaced python-jose 3.3.0 with PyJWT 2.15.1; raised Next.js/React minimum versions to patched security releases; updated vulnerable Python packages; added blocking pip-audit and production npm audit gates. | Full npm audit still reports a high-severity braces advisory with no upstream patched release in the Tailwind/ESLint build-tool dependency chain, plus a moderate selector-parser advisory. These are build-time dependencies; monitor for upstream fixes. CodeQL and Dependabot are configured. |
 
 ## Release gates
 
