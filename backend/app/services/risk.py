@@ -44,6 +44,7 @@ class RiskService:
         quantity: Decimal,
         estimated_price: Decimal | None = None,
         strategy_id=None,
+        require_limits: bool = False,
     ) -> RiskDecision:
         if portfolio.status is not PortfolioStatus.ACTIVE:
             return RiskDecision(False, "Portfolio is not active")
@@ -59,6 +60,8 @@ class RiskService:
         )
         limits = result.scalar_one_or_none()
         if limits is None:
+            if require_limits:
+                return RiskDecision(False, "Risk limits are not configured")
             return RiskDecision(True)
 
         if limits.kill_switch:
