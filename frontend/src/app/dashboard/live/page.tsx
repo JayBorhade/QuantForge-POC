@@ -55,10 +55,10 @@ export default function LiveTradingPage() {
       {error && <p className="mb-4 rounded-lg border border-red-500/30 p-3 text-sm text-red-500" role="alert">{error}</p>}
       <div className="mb-4 flex items-center gap-2" aria-live="polite">
         <span className="relative flex h-3 w-3">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-          <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500" />
+          {connected && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75 motion-reduce:animate-none" />}
+          <span className={`relative inline-flex h-3 w-3 rounded-full ${connected ? "bg-emerald-500" : "bg-muted-foreground"}`} />
         </span>
-        <span className="text-sm text-emerald-400">
+        <span className={`text-sm ${connected ? "text-emerald-400" : "text-muted-foreground"}`}>
           {connected ? "WebSocket connected" : "WebSocket disconnected"}
         </span>
         {lastMessage?.type === "trade" && (
