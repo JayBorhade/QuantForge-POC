@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.api.deps import CurrentUser, DbSession
 from app.models.audit_log import AuditLog
@@ -130,7 +130,10 @@ async def get_risk_events(
         .where(
             AuditLog.resource == "portfolio",
             AuditLog.resource_id == str(portfolio.id),
-            AuditLog.action.like("risk%"),
+            or_(
+                AuditLog.action.like("risk%"),
+                AuditLog.action == "order.risk_rejected",
+            ),
         )
         .order_by(AuditLog.created_at.desc())
         .limit(limit)
