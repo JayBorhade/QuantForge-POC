@@ -1,6 +1,7 @@
 """Email service — SMTP with a safe development fallback."""
 
 import logging
+from html import escape
 from typing import Optional
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -27,7 +28,8 @@ async def send_email(to: str, subject: str, html_body: str, text_body: Optional[
     message = MIMEMultipart("alternative")
     message["From"] = settings.smtp_from
     message["To"] = to
-    message["Subject"] = subject
+    # Prevent CR/LF header injection and keep untrusted subjects bounded.
+    message["Subject"] = subject.replace("\\r", " ").replace("\\n", " ")[:200]
     message.attach(MIMEText(text_body, "plain"))
     message.attach(MIMEText(html_body, "html"))
 
@@ -67,5 +69,7 @@ async def send_password_reset_email(to: str, token: str) -> bool:
 
 
 async def send_trade_alert_email(to: str, symbol: str, side: str, pnl: float) -> bool:
-    html = f"<p>Trade executed: <b>{side.upper()}</b> {symbol} | PnL: {pnl:.2f}</p>"
-    return await send_email(to, f"Trade Alert: {symbol}", html)
+    safe_symbol = escape(str(symbol)[:32])
+    safe_side = escape(str(side).upper()[:8])
+    html = f"<p>Trade executed: <b>{safe_side}</b> {safe_symbol} | PnL: {pnl:.2f}</p>"
+    return await send_email(to, f"Trade Alert: {str(symbol)[:32]}", html)
