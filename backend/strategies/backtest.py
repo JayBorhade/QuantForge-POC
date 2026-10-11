@@ -127,4 +127,12 @@ class BacktestEngine:
         ticker = yf.Ticker(symbol)
         frame = ticker.history(start=start.strftime("%Y-%m-%d"), end=end.strftime("%Y-%m-%d"))
         frame.columns = [str(c).lower() for c in frame.columns]
-        return frame.reset_index()
+        frame = frame.reset_index()
+        # Provider versions differ on whether the reset index is named Date,
+        # Datetime, or date. Normalize the contract once at the boundary.
+        frame.columns = [str(column).lower() for column in frame.columns]
+        if "date" not in frame.columns and "datetime" in frame.columns:
+            frame = frame.rename(columns={"datetime": "date"})
+        if "date" not in frame.columns:
+            raise ValueError("Historical data provider returned no date column")
+        return frame
