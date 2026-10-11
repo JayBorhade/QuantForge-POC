@@ -13,20 +13,28 @@ from sqlalchemy import select
 from app.core.config import get_settings
 from app.db.session import AsyncSessionLocal
 from app.models.session import UserSession
+from app.models.user import User
 
 router = APIRouter(tags=["WebSocket"])
 settings = get_settings()
 
 
 class ConnectionManager:
+    MAX_CONNECTIONS_PER_USER = 5
+
     def __init__(self):
         self.active_connections: Dict[str, Set[WebSocket]] = {}
 
-    async def connect(self, user_id: str, websocket: WebSocket):
+    async def connect(self, user_id: str, websocket: WebSocket) -> bool:
+        connections = self.active_connections.setdefault(user_id, set())
+        if len(connections) >= self.MAX_CONNECTIONS_PER_USER:
+            if not connections:
+                self.active_connections.pop(user_id, None)
+            await websocket.close(code=4008, reason="Connection limit reached")
+            return False
         await websocket.accept()
-        if user_id not in self.active_connections:
-            self.active_connections[user_id] = set()
-        self.active_connections[user_id].add(websocket)
+        connections.add(websocket)
+        return True
 
     def disconnect(self, user_id: str, websocket: WebSocket):
         if user_id in self.active_connections:
@@ -72,7 +80,16 @@ async def _session_is_active(user_id: str, session_jti: str) -> bool:
                 UserSession.expires_at > datetime.now(timezone.utc),
             )
         )
-        return result.scalar_one_or_none() is not None
+        if result.scalar_one_or_none() is None:
+            return False
+        user_result = await db.execute(
+            select(User).where(
+                User.id == parsed_user_id,
+                User.is_active == True,
+                User.is_banned == False,
+            )
+        )
+        return user_result.scalar_one_or_none() is not None
 
 
 def init_websocket_manager():
@@ -81,10 +98,18 @@ def init_websocket_manager():
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, token: str = ""):
-    """Authenticated control channel for user updates and market-data subscriptions."""
+async def websocket_endpoint(websocket: WebSocket):
+    """Cookie-authenticated control channel for user updates and market-data subscriptions."""
+    origin = websocket.headers.get("origin")
+    if not origin or origin.rstrip("/") not in {item.rstrip("/") for item in settings.cors_origins}:
+        await websocket.close(code=4403, reason="Origin not allowed")
+        return
+
+    # Do not accept bearer tokens in query strings: URLs commonly reach logs,
+    # browser history, proxy telemetry, and monitoring systems.
+    token = websocket.cookies.get("access_token")
     if not token:
-        await websocket.close(code=4001)
+        await websocket.close(code=4001, reason="Authentication required")
         return
 
     try:
@@ -92,25 +117,28 @@ async def websocket_endpoint(websocket: WebSocket, token: str = ""):
             token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
         )
         if payload.get("type") != "access" or not payload.get("sub"):
-            await websocket.close(code=4001)
+            await websocket.close(code=4001, reason="Invalid token")
             return
-        user_id = str(payload["sub"])
+        user_id = str(uuid.UUID(str(payload["sub"])))
         session_jti = payload.get("session_jti")
+        # WebSocket access must be tied to a revocable server-side session.
+        if not isinstance(session_jti, str) or not session_jti:
+            await websocket.close(code=4001, reason="Session required")
+            return
     except Exception:
-        await websocket.close(code=4001)
+        await websocket.close(code=4001, reason="Invalid token")
         return
 
-    if session_jti:
-        try:
-            active_session = await _session_is_active(user_id, str(session_jti))
-        except Exception:
-            # Fail closed if session state cannot be checked.
-            active_session = False
-        if not active_session:
-            await websocket.close(code=4001)
-            return
+    try:
+        active_session = await _session_is_active(user_id, session_jti)
+    except Exception:
+        active_session = False
+    if not active_session:
+        await websocket.close(code=4001, reason="Session revoked or expired")
+        return
 
-    await manager.connect(user_id, websocket)
+    if not await manager.connect(user_id, websocket):
+        return
     init_websocket_manager()
     market_task = None
 
