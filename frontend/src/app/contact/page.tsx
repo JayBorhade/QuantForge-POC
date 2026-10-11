@@ -9,7 +9,6 @@ import { Card } from "@/components/ui/card";
 export default function ContactPage() {
   const [message, setMessage] = useState("");
   const [notice, setNotice] = useState<{ kind: "info" | "error"; text: string } | null>(null);
-  const [sending, setSending] = useState(false);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -31,13 +30,15 @@ export default function ContactPage() {
       setNotice({ kind: "error", text: "Complete all required fields before continuing." });
       return;
     }
+    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+      setNotice({ kind: "error", text: "Enter a valid reply email address." });
+      return;
+    }
 
-    setSending(true);
     const subject = encodeURIComponent(`QuantForge support request from ${name}`);
     const content = encodeURIComponent(`Name: ${name}\nReply email: ${email}\n\n${body}`);
     window.location.href = `mailto:${supportEmail}?subject=${subject}&body=${content}`;
     setNotice({ kind: "info", text: "Your email app should open with a draft. Review it and press Send to contact support; this website cannot confirm delivery." });
-    setSending(false);
   };
 
   return (
@@ -61,7 +62,7 @@ export default function ContactPage() {
               <textarea id="contact-message" name="message" className="flex min-h-[120px] w-full rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" placeholder="How can we help?" required />
             </div>
             {notice && <p className={notice.kind === "error" ? "text-sm text-red-500" : "text-sm text-muted-foreground"} role={notice.kind === "error" ? "alert" : "status"}>{notice.text}</p>}
-            <Button type="submit" className="w-full" disabled={sending}>{sending ? "Preparing email…" : "Prepare Email"}</Button>
+            <Button type="submit" className="w-full">Prepare Email</Button>
           </form>
         </Card>
       </main>
