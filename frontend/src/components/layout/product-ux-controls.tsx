@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowUp, Search, Sun, Moon, X, ExternalLink } from "lucide-react";
+import { ArrowUp, Search, Sun, Moon, X, Mail } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 const searchablePages = [
@@ -184,7 +184,7 @@ export function ProductUxControls() {
 
       {isMarketing && (
         <Link href="/contact" className="floating-contact fixed right-5 z-30 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-card px-4 py-3 text-sm font-medium shadow-lg hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          Contact <ExternalLink aria-hidden="true" className="h-4 w-4" />
+          Contact <Mail aria-hidden="true" className="h-4 w-4" />
         </Link>
       )}
     </>
