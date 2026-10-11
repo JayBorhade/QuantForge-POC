@@ -35,6 +35,22 @@ services:
       timeout: 5s
       retries: 10
 
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: quantforge-migrate
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-quantforge}:${POSTGRES_PASSWORD:-quantforge_secret}@postgres:5432/${POSTGRES_DB:-quantforge}
+      APP_ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
   backend:
     build:
       context: ./backend
@@ -50,8 +66,6 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/2
       FRONTEND_URL: http://localhost:3000
       BACKEND_URL: http://localhost:8000
-      APP_ENV: development
-      DEBUG: "true"
       CSRF_ENABLED: "true"
     ports:
       - "127.0.0.1:8000:8000"
@@ -60,13 +74,14 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: sh -c "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
   frontend:
     build:
