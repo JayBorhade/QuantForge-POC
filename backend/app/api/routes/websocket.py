@@ -2,12 +2,17 @@
 
 import asyncio
 import json
+import uuid
+from datetime import datetime, timezone
 from typing import Dict, Set
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from jose import jwt
+from sqlalchemy import select
 
 from app.core.config import get_settings
+from app.db.session import AsyncSessionLocal
+from app.models.session import UserSession
 
 router = APIRouter(tags=["WebSocket"])
 settings = get_settings()
@@ -26,6 +31,18 @@ class ConnectionManager:
     def disconnect(self, user_id: str, websocket: WebSocket):
         if user_id in self.active_connections:
             self.active_connections[user_id].discard(websocket)
+            if not self.active_connections[user_id]:
+                self.active_connections.pop(user_id, None)
+
+    async def disconnect_user(self, user_id: str) -> None:
+        """Close all WebSocket connections for a user after session revocation."""
+        connections = self.active_connections.pop(user_id, set())
+        for connection in connections:
+            try:
+                await connection.close(code=4001, reason="Session revoked")
+            except Exception:
+                # A connection may already be gone; do not block revocation.
+                continue
 
     async def send_personal(self, user_id: str, message: dict):
         if user_id in self.active_connections:
@@ -37,6 +54,25 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+
+
+async def _session_is_active(user_id: str, session_jti: str) -> bool:
+    """Fail-closed check for access tokens bound to a refresh session."""
+    try:
+        parsed_user_id = uuid.UUID(user_id)
+    except (TypeError, ValueError):
+        return False
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(UserSession).where(
+                UserSession.user_id == parsed_user_id,
+                UserSession.refresh_token_jti == session_jti,
+                UserSession.is_active == True,
+                UserSession.expires_at > datetime.now(timezone.utc),
+            )
+        )
+        return result.scalar_one_or_none() is not None
 
 
 def init_websocket_manager():
@@ -59,9 +95,20 @@ async def websocket_endpoint(websocket: WebSocket, token: str = ""):
             await websocket.close(code=4001)
             return
         user_id = str(payload["sub"])
+        session_jti = payload.get("session_jti")
     except Exception:
         await websocket.close(code=4001)
         return
+
+    if session_jti:
+        try:
+            active_session = await _session_is_active(user_id, str(session_jti))
+        except Exception:
+            # Fail closed if session state cannot be checked.
+            active_session = False
+        if not active_session:
+            await websocket.close(code=4001)
+            return
 
     await manager.connect(user_id, websocket)
     init_websocket_manager()
