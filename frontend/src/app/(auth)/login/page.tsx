@@ -23,7 +23,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("registered") === "1") {
-      setRegisteredMessage("Account created. Sign in to continue.");
+      setRegisteredMessage("If registration was successful, check your inbox for verification instructions before signing in.");
     }
   }, []);
 
