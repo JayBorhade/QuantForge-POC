@@ -30,7 +30,7 @@ def upgrade() -> None:
     bind = op.get_bind()
     rows = bind.execute(
         sa.text("SELECT id, two_factor_secret FROM users WHERE two_factor_secret IS NOT NULL")
-    ).mappings()
+    ).mappings().all()
     for row in rows:
         value = row["two_factor_secret"]
         if not value.startswith(MFA_SECRET_PREFIX):
