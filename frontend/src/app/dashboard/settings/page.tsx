@@ -158,7 +158,7 @@ export default function SettingsPage() {
           <ul className="grid grid-cols-2 gap-2 font-mono text-sm" aria-label="Recovery codes">
             {recoveryCodes.map((code) => <li key={code} className="rounded bg-secondary p-2">{code}</li>)}
           </ul>
-          <Button className="mt-3" variant="outline" onClick={() => { void navigator.clipboard.writeText(recoveryCodes.join("\\n")); }}>Copy recovery codes</Button>
+          <Button className="mt-3" variant="outline" onClick={() => { void navigator.clipboard.writeText(recoveryCodes.join("\n")); }}>Copy recovery codes</Button>
         </section>
       )}
       <div className="grid max-w-2xl gap-6">
