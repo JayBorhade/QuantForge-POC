@@ -112,7 +112,7 @@ class AuthService:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid 2FA code")
 
         jti = generate_token()[:32]
-        access_token = create_access_token(str(user.id), {"role": user.role.value})
+        access_token = create_access_token(str(user.id), {"role": user.role.value, "session_jti": jti})
         refresh_token = create_refresh_token(str(user.id), jti)
 
         ua_string = request.headers.get("user-agent", "")
@@ -169,7 +169,7 @@ class AuthService:
         session.is_active = False
         new_jti = generate_token()[:32]
         new_refresh = create_refresh_token(user_id, new_jti)
-        new_access = create_access_token(user_id)
+        new_access = create_access_token(user_id, {"session_jti": new_jti})
 
         ua_string = request.headers.get("user-agent", "")
         ua = parse_ua(ua_string)
