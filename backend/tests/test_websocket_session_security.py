@@ -60,11 +60,11 @@ class WebSocketSessionSecurityTests(unittest.TestCase):
     def test_session_check_accepts_active_session(self):
         user_id = str(uuid.uuid4())
         db = AsyncMock()
-        db.execute = AsyncMock(return_value=Result(object()))
+        db.execute = AsyncMock(side_effect=[Result(object()), Result(object())])
         with patch("app.api.routes.websocket.AsyncSessionLocal", return_value=SessionContext(db)):
             active = asyncio.run(_session_is_active(user_id, "session-1"))
         self.assertTrue(active)
-        db.execute.assert_awaited_once()
+        self.assertEqual(db.execute.await_count, 2)
 
     def test_session_check_rejects_revoked_or_missing_session(self):
         user_id = str(uuid.uuid4())
