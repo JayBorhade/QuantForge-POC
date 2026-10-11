@@ -150,6 +150,7 @@ export function ProductUxControls() {
               <Search aria-hidden="true" className="h-5 w-5 text-muted-foreground" />
               <h2 id="site-search-title" className="sr-only">Search QuantForge</h2>
               <input ref={searchInputRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search pages and features…" aria-label="Search pages and features" className="min-w-0 flex-1 bg-transparent py-2 text-sm outline-none" />
+              {query && <button type="button" className="ux-icon-button" aria-label="Clear search" onClick={() => { setQuery(""); searchInputRef.current?.focus(); }}><X aria-hidden="true" className="h-4 w-4" /></button>}
               <button type="button" className="ux-icon-button" aria-label="Close search" onClick={() => setSearchOpen(false)}><X aria-hidden="true" className="h-4 w-4" /></button>
             </div>
             <div className="mt-3 max-h-[55vh] overflow-y-auto" aria-live="polite">
