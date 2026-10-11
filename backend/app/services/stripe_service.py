@@ -83,7 +83,7 @@ def handle_webhook_event(payload: bytes, sig_header: str) -> Dict[str, Any]:
     event = stripe.Webhook.construct_event(
         payload, sig_header, settings.stripe_webhook_secret
     )
-    return {"type": event.type, "data": event.data.object}
+    return {"id": event.id, "type": event.type, "data": event.data.object}
 
 
 def map_stripe_plan(price_id: Optional[str]) -> str:
