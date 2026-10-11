@@ -26,6 +26,21 @@ def decrypt_value(ciphertext: str) -> str:
     return _get_fernet().decrypt(ciphertext.encode()).decode()
 
 
+MFA_SECRET_PREFIX = "enc:v1:"
+
+
+def encrypt_mfa_secret(secret: str) -> str:
+    """Encrypt a TOTP seed at rest and mark its format for safe migration."""
+    return MFA_SECRET_PREFIX + encrypt_value(secret)
+
+
+def decrypt_mfa_secret(value: str) -> str:
+    """Decrypt marked TOTP seeds; accept legacy plaintext during migration rollout."""
+    if value.startswith(MFA_SECRET_PREFIX):
+        return decrypt_value(value[len(MFA_SECRET_PREFIX):])
+    return value
+
+
 def encrypt_credentials(
     api_key: str,
     api_secret: str,
