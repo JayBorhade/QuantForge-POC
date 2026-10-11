@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import hashlib
 from typing import Any, Mapping
 
 import httpx
@@ -72,8 +73,10 @@ class ZerodhaBrokerAdapter:
             payload["price"] = str(request.limit_price)
         if params.get("market_protection") is not None:
             payload["market_protection"] = params["market_protection"]
-        if params.get("tag"):
-            payload["tag"] = params["tag"][:20]
+        # Kite tags are visible in the order book. Use a stable, compact
+        # digest of our idempotency key so an ambiguous submission can be
+        # reconciled without blindly resubmitting it.
+        payload["tag"] = "qf" + hashlib.sha256(request.client_order_id.encode()).hexdigest()[:18]
         if params.get("autoslice") is not None:
             payload["autoslice"] = params["autoslice"]
 
@@ -93,6 +96,39 @@ class ZerodhaBrokerAdapter:
                     data.get("message") or f"Zerodha rejected the order ({response.status_code})"
                 )
             return BrokerOrderResult(str(data["data"]["order_id"]), "submitted")
+
+    @staticmethod
+    def _client_tag(client_order_id: str) -> str:
+        return "qf" + hashlib.sha256(client_order_id.encode()).hexdigest()[:18]
+
+    async def find_order_by_client_order_id(
+        self, client_order_id: str, symbol: str
+    ) -> BrokerOrderResult | None:
+        async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
+            response = await client.get(f"{self.BASE_URL}/orders", headers=self._headers())
+            if response.status_code >= 500:
+                raise BrokerSubmissionUnknown(
+                    f"Zerodha order-book lookup returned HTTP {response.status_code}"
+                )
+            response.raise_for_status()
+            data = response.json()
+        if data.get("status") != "success":
+            raise RuntimeError("Zerodha order-book lookup failed")
+        expected_tag = self._client_tag(client_order_id)
+        for item in data.get("data") or []:
+            if item.get("tag") != expected_tag:
+                continue
+            if str(item.get("tradingsymbol", "")).upper() != symbol.upper():
+                continue
+            filled = Decimal(str(item.get("filled_quantity", "0")))
+            average = Decimal(str(item.get("average_price", "0")))
+            return BrokerOrderResult(
+                broker_order_id=str(item["order_id"]),
+                status=self._status(str(item.get("status", "OPEN"))),
+                filled_quantity=filled,
+                average_fill_price=average if average > 0 else None,
+            )
+        return None
 
     async def cancel_order(self, broker_order_id: str) -> None:
         async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
