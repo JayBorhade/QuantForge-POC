@@ -27,19 +27,39 @@ interface HistoryPoint {
 
 export default function DashboardPage() {
   const [overview, setOverview] = useState<Overview | null>(null);
-  const [history, setHistory] = useState<HistoryPoint[]>([]);
+  const [history, setHistory] = useState<HistoryPoint[]>([]);\n  const [loading, setLoading] = useState(true);\n  const [error, setError] = useState("");
 
   useEffect(() => {
-    dashboardApi.overview().then((r) => setOverview(r.data)).catch(() => setOverview(null));
-    portfolioApi.list().then(async (r) => {
-      const first = r.data?.[0];
-      if (!first) return;
-      const historyResponse = await portfolioApi.history(first.id, 30);
-      setHistory(historyResponse.data?.map((point: HistoryPoint) => ({
-        timestamp: point.timestamp,
-        equity: Number(point.equity),
-      })) ?? []);
-    }).catch(() => setHistory([]));
+    let mounted = true;
+    const load = async () => {
+      try {
+        const response = await dashboardApi.overview();
+        if (mounted) setOverview(response.data);
+      } catch {
+        if (mounted) setError("Dashboard overview could not be loaded.");
+      }
+      try {
+        const response = await portfolioApi.list();
+        const first = Array.isArray(response.data) ? response.data[0] : null;
+        if (first) {
+          const historyResponse = await portfolioApi.history(first.id, 30);
+          if (mounted) {
+            setHistory(Array.isArray(historyResponse.data) ? historyResponse.data.map((point: HistoryPoint) => ({
+              timestamp: point.timestamp,
+              equity: Number(point.equity),
+            })) : []);
+          }
+        } else if (mounted) {
+          setHistory([]);
+        }
+      } catch {
+        if (mounted) setError((current) => current || "Portfolio history could not be loaded.");
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    void load();
+    return () => { mounted = false; };
   }, []);
 
   const stats = overview
