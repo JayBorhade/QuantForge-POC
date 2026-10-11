@@ -118,6 +118,9 @@ async def logout(
         jti = payload.get("jti") if payload else None
 
     await AuthService.logout(db, current_user.id, jti)
+    # Close already-established sockets as well as invalidating future requests.
+    from app.api.routes.websocket import manager
+    await manager.disconnect_user(str(current_user.id))
     clear_auth_cookies(response)
     return {"message": "Logged out successfully"}
 
@@ -159,6 +162,8 @@ async def reset_password(data: ResetPasswordRequest, db: DbSession, request: Req
     # refresh session so old refresh tokens cannot mint new access tokens.
     # Already-issued access tokens remain valid only until their short expiry.
     await AuthService.revoke_sessions(db, user.id)
+    from app.api.routes.websocket import manager
+    await manager.disconnect_user(str(user.id))
     await log_audit(db, action="user.reset_password", user_id=user.id)
     return {"message": "Password reset successfully"}
 
