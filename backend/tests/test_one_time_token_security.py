@@ -1,6 +1,6 @@
 """Regression tests for one-time authentication token storage."""
+import json
 import unittest
-from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pyotp
@@ -23,6 +23,13 @@ class OneTimeTokenSecurityTests(unittest.TestCase):
         code = pyotp.TOTP(secret).now()
         self.assertTrue(AuthService.verify_totp_once(user, code))
         self.assertFalse(AuthService.verify_totp_once(user, code))
+
+    def test_recovery_code_is_consumed_once(self):
+        code = "one-time-recovery-code"
+        user = SimpleNamespace(two_factor_recovery_codes=json.dumps([hash_one_time_token(code)]))
+        self.assertTrue(AuthService.consume_recovery_code(user, code))
+        self.assertFalse(AuthService.consume_recovery_code(user, code))
+        self.assertEqual(json.loads(user.two_factor_recovery_codes), [])
 
     def test_different_tokens_have_different_digests(self):
         self.assertNotEqual(hash_one_time_token("token-a"), hash_one_time_token("token-b"))
