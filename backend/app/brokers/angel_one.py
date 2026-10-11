@@ -63,7 +63,7 @@ class AngelOneBrokerAdapter:
         required = ("exchange", "symboltoken", "producttype")
         missing = [key for key in required if not request.broker_params.get(key)]
         if missing:
-            raise ValueError(f"Angel One order missing broker_params: {', '.join(missing)}")
+            raise BrokerSubmissionRejected(f"Angel One order missing broker_params: {', '.join(missing)}")
 
         # Angel One exposes ordertag in its order book; derive a deterministic
         # compact tag from the client id so uncertain submissions can be found.
@@ -84,7 +84,7 @@ class AngelOneBrokerAdapter:
             "ordertag": client_tag,
         }
         if request.order_type is OrderType.LIMIT and request.limit_price is None:
-            raise ValueError("Angel One LIMIT order requires limit_price")
+            raise BrokerSubmissionRejected("Angel One LIMIT order requires limit_price")
 
         async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
             response = await client.post(
