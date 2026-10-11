@@ -1,7 +1,7 @@
 """Notification task results must reflect actual email delivery."""
 
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 
 class NotificationDeliveryTests(unittest.TestCase):
@@ -9,7 +9,7 @@ class NotificationDeliveryTests(unittest.TestCase):
         from app.tasks.notification_tasks import send_email_notification
 
         with patch("app.tasks.notification_tasks._user_email", return_value="user@example.com"), patch(
-            "app.services.email.send_email", return_value=False
+            "app.services.email.send_email", new_callable=AsyncMock, return_value=False
         ):
             result = send_email_notification.run("00000000-0000-0000-0000-000000000001", "Notice", "body")
 
