@@ -37,9 +37,11 @@ app = FastAPI(
     description="QuantForge — Build, Backtest, Automate, Scale",
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json",
+    # Interactive API documentation exposes the route/schema inventory. Keep it
+    # available for local development, but disabled in non-local environments.
+    docs_url="/api/docs" if settings.app_env.strip().lower() in {"development", "local", "test"} else None,
+    redoc_url="/api/redoc" if settings.app_env.strip().lower() in {"development", "local", "test"} else None,
+    openapi_url="/api/openapi.json" if settings.app_env.strip().lower() in {"development", "local", "test"} else None,
 )
 
 app.state.limiter = limiter
