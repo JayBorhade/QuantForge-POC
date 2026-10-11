@@ -161,7 +161,7 @@ async def reset_password(data: ResetPasswordRequest, db: DbSession, request: Req
         select(User).where(
             User.password_reset_token == hash_one_time_token(data.token),
             User.password_reset_expires > datetime.now(timezone.utc),
-        )
+        ).with_for_update()
     )
     user = result.scalar_one_or_none()
     if not user:
@@ -208,7 +208,7 @@ async def verify_email(data: VerifyEmailRequest, request: Request, db: DbSession
         select(User).where(
             User.email_verification_token == hash_one_time_token(data.token),
             User.email_verification_expires > datetime.now(timezone.utc),
-        )
+        ).with_for_update()
     )
     user = result.scalar_one_or_none()
     if not user:
