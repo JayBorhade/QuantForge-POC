@@ -38,13 +38,14 @@ class ZerodhaBrokerAdapter:
             return "cancelled"
         if status in {"REJECTED"}:
             return "rejected"
-        if status in {"OPEN", "OPEN PENDING", "VALIDATION PENDING", "PUT ORDER REQ RECEIVED"}:
-            return "submitted"
         if status in {
             "OPEN", "OPEN PENDING", "VALIDATION PENDING",
             "PUT ORDER REQ RECEIVED", "AMO REQ RECEIVED",
             "TRIGGER PENDING", "MODIFY PENDING", "CANCEL PENDING",
+            "PARTIALLY FILLED",
         }:
+            if status == "PARTIALLY FILLED":
+                return "partially_filled"
             return "submitted"
         raise ValueError("Unsupported Zerodha order status")
     
