@@ -40,10 +40,13 @@ class PlanInfo(BaseModel):
     stripe_enabled: bool
 
 
+# Advertise only capabilities implemented by this repository. Live broker
+# execution and provider-backed AI insights are not enabled, so they must not
+# be sold as plan features.
 PLAN_FEATURES = {
-    "free": ["2 strategies", "Paper trading", "Basic backtest"],
-    "starter": ["5 strategies", "Paper + limited live", "Email alerts"],
-    "pro": ["Unlimited strategies", "Full live trading", "AI insights", "Priority support"],
+    "free": ["Strategy research", "Paper trading", "Basic backtesting"],
+    "starter": ["Paper trading", "Backtesting", "Email alerts when SMTP is configured"],
+    "pro": ["Advanced backtest analytics", "Paper trading", "Portfolio risk analytics"],
 }
 
 
