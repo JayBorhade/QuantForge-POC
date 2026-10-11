@@ -61,7 +61,7 @@ class StripeWebhookIdempotencyTests(unittest.TestCase):
     def test_concurrent_duplicate_rolls_back_and_acknowledges(self):
         db = AsyncMock()
         db.execute = AsyncMock(return_value=Result(None))
-        db.flush = AsyncMock(side_effect=IntegrityError("insert", {}, Exception("duplicate key")))
+        db.flush = AsyncMock(side_effect=IntegrityError("insert", {}, SimpleNamespace(sqlstate="23505")))
         event = {"id": "evt_race", "type": "customer.updated", "data": {}}
 
         with patch("app.api.routes.billing.stripe_enabled", return_value=True), patch(
