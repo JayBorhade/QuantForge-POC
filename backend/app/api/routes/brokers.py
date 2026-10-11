@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, VerifiedUser
 from app.brokers.factory import get_broker_adapter
 from app.core.encryption import decrypt_credentials, encrypt_credentials, mask_api_key
 from app.models.broker_token import BrokerToken, BrokerType
@@ -62,7 +62,7 @@ async def list_brokers(current_user: CurrentUser, db: DbSession):
 
 
 @router.post("/connect", response_model=BrokerResponse, status_code=status.HTTP_201_CREATED)
-async def connect_broker(data: BrokerConnectRequest, current_user: CurrentUser, db: DbSession):
+async def connect_broker(data: BrokerConnectRequest, current_user: VerifiedUser, db: DbSession):
     adapter = get_broker_adapter(
         data.broker.value,
         data.api_key,
