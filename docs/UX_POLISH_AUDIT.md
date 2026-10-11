@@ -42,7 +42,10 @@
 - Added real article destinations for the existing blog links and labelled their dates as publication dates.
 - Added date-range/capital validation and truthful completed/failed/timeout handling to the backtest form; prevented undefined metric labels from being presented as results.
 - Fixed CSRF-cookie parsing in the Axios client and made network-error refresh handling safer.
-- Added a real `/dashboard/logs` page backed by the existing user-scoped strategy-run and audit-log endpoints; the synthetic system-log endpoint is intentionally not presented as genuine monitoring data.\n- Hardened settings workflows with explicit 2FA loading/error/success states, six-digit OTP validation, confirmation before disabling 2FA, billing portal destination validation, and removed an unsaved email-alert checkbox that did not persist any preference.\n- Added signup duplicate-submit protection, numeric-only 2FA input and registration success feedback on login; validated contact email input before preparing a mail draft.\n- Throttled scroll progress updates to animation frames and made the closed mobile dashboard drawer non-focusable. Added safer generic error messages for selected forms; credentials and server diagnostic details are not intentionally surfaced by these UI messages.
+- Added a real `/dashboard/logs` page backed by the existing user-scoped strategy-run and audit-log endpoints; the synthetic system-log endpoint is intentionally not presented as genuine monitoring data.
+- Hardened settings workflows with explicit 2FA loading/error/success states, six-digit OTP validation, confirmation before disabling 2FA, billing portal destination validation, and removed an unsaved email-alert checkbox that did not persist any preference.
+- Added signup duplicate-submit protection, numeric-only 2FA input and registration success feedback on login; validated contact email input before preparing a mail draft.
+- Throttled scroll progress updates to animation frames and made the closed mobile dashboard drawer non-focusable. Added safer generic error messages for selected forms; credentials and server diagnostic details are not intentionally surfaced by these UI messages.
 - No database schema, trading algorithms, broker API contracts or live-execution rules were intentionally changed.
 
 ## Verification still required
