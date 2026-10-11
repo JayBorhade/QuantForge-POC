@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 
 from app.api.deps import CurrentAdmin, DbSession
 from app.models.audit_log import AuditLog
+from app.models.strategy import Strategy, StrategyStatus
 from app.models.subscription import Subscription
 from app.models.user import User
 
@@ -65,14 +66,18 @@ async def get_analytics(admin: CurrentAdmin, db: DbSession) -> Dict[str, Any]:
     users_count = await db.execute(select(func.count(User.id)))
     active_users = await db.execute(select(func.count(User.id)).where(User.is_active == True))
     subs = await db.execute(select(func.count(Subscription.id)))
+    active_strategies = await db.execute(
+        select(func.count(Strategy.id)).where(Strategy.status == StrategyStatus.ACTIVE)
+    )
 
     return {
         "total_users": users_count.scalar() or 0,
         "active_users": active_users.scalar() or 0,
         "subscriptions": subs.scalar() or 0,
-        "api_requests_24h": 12847,
-        "active_strategies": 342,
-        "server_status": "healthy",
+        "api_requests_24h": None,
+        "api_request_metrics_available": False,
+        "active_strategies": active_strategies.scalar() or 0,
+        "server_status": "database_connected",
     }
 
 
