@@ -1,5 +1,7 @@
 # QuantForge Security Hardening Status
 
+Full 20-point review: [SECURITY_AUDIT_2026-10-11.md](SECURITY_AUDIT_2026-10-11.md). The audit records source-review evidence and distinguishes proposed fixes from deployed/verified controls.
+
 This document records source-level controls added during the security-hardening batch. It is not a penetration-test certificate; deployment, provider, and database behavior still require staging validation.
 
 ## Controls
@@ -15,11 +17,11 @@ This document records source-level controls added during the security-hardening 
 | JWT secrets | HS256 is the only accepted algorithm; production/staging require distinct, high-entropy, non-placeholder secrets. | Implemented; rotate any real secrets ever committed or shared. |
 | Exposed API secrets | Local launch scripts generate fresh local secrets; committed examples contain placeholders only. | No provider credentials should be committed; use secret-manager/environment injection. |
 | Password hashing | New passwords use SHA-256 pre-hashing plus salted bcrypt to avoid bcrypt's 72-byte truncation; legacy bcrypt hashes are verified and upgraded on successful login. | Implemented with regression tests. |
-| MFA | TOTP is available; admin access now requires MFA. | Implemented for admins; ordinary users can enable MFA. TOTP seed is currently stored in plaintext in the database; encrypt it with a schema migration before production. Test recovery and account-support procedures. |
+| MFA | TOTP is available; admin access now requires MFA. | Implemented for admins; ordinary users can enable MFA. TOTP seeds are encrypted at rest on this branch with an Alembic data migration and a versioned ciphertext marker. Apply the migration with the correct ENCRYPTION_KEY and validate existing MFA accounts in staging before production. Test recovery and account-support procedures. |
 | CORS | Exact configured origins, explicit methods/headers; non-local environments require HTTPS origins. | Implemented; verify the real production origin list. |
 | Auth token storage | Access/refresh tokens use HttpOnly cookies; API responses no longer return the access token; refresh reads only the HttpOnly cookie. | Implemented; browser storage should contain no auth tokens. |
 | Client-side authorization | Backend dependencies enforce authentication, verified-email requirements, role checks, and admin MFA. | Server is authoritative; continue testing every sensitive route directly. |
-| Database row-level security | The application currently uses application-layer ownership checks; PostgreSQL RLS policies are not configured. | NOT IMPLEMENTED. RLS requires a deliberate tenant/session-context design covering API requests, Celery tasks, migrations, and admin workflows before enabling it safely. |
+| Database row-level security | The application currently uses application-layer ownership checks; PostgreSQL RLS policies are not configured. | NOT IMPLEMENTED. RLS remains a release blocker; implement and test tenant/session context for API requests, Celery tasks, migrations, and admin workflows before enabling it safely. |
 | Webhook signatures | Stripe events are passed through the provider signature verifier before processing, with event idempotency. | Implemented in source; test replay, invalid signatures, and secret rotation in Stripe test mode. |
 | SSRF | No user-controlled arbitrary-URL fetch endpoint was identified in the reviewed paths; Next image optimization no longer allows every HTTPS hostname. | Implemented baseline; review any future URL-fetching integrations and broker/provider allowlists. |
 | Source maps | Next production browser source maps are explicitly disabled. | Implemented; inspect deployed artifacts/CDN after build. |
