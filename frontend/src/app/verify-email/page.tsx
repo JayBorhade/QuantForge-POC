@@ -41,13 +41,13 @@ function VerifyContent() {
 
 export default function VerifyEmailPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
+    <main id="page-content" tabIndex={-1} className="flex min-h-screen items-center justify-center px-4 outline-none">
       <Card className="w-full max-w-md p-8 text-center">
         <h1 className="text-2xl font-bold mb-6">Email Verification</h1>
         <Suspense fallback={<p>Loading...</p>}>
           <VerifyContent />
         </Suspense>
       </Card>
-    </div>
+    </main>
   );
 }

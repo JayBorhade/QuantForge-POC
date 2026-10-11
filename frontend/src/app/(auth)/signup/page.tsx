@@ -23,6 +23,7 @@ export default function SignupPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
     setError("");
     if (form.password !== form.confirm_password) {
       setError("Passwords do not match");
@@ -33,7 +34,7 @@ export default function SignupPage() {
       router.push("/login?registered=1");
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string | object } } })?.response?.data?.detail;
-      setError(typeof detail === "string" ? detail : "Registration failed");
+      setError(detail === "Email already registered" ? detail : "Registration failed. Check your details and try again.");
     }
   };
 
@@ -41,7 +42,7 @@ export default function SignupPage() {
     setForm((f) => ({ ...f, [key]: e.target.value }));
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4 py-12">
+    <main id="page-content" tabIndex={-1} className="flex min-h-screen items-center justify-center px-4 py-12 outline-none">
       <Card className="w-full max-w-md p-8">
         <div className="mb-8 flex flex-col items-center">
           <Activity className="h-10 w-10 text-primary mb-2" />
@@ -58,8 +59,11 @@ export default function SignupPage() {
             { key: "confirm_password", label: "Confirm Password", type: "password" },
           ].map((field) => (
             <div key={field.key}>
-              <label className="text-sm text-muted-foreground">{field.label}</label>
+              <label htmlFor={`signup-${field.key}`} className="text-sm text-muted-foreground">{field.label}</label>
               <Input
+                id={`signup-${field.key}`}
+                name={field.key}
+                autoComplete={field.key === "email" ? "email" : field.key === "full_name" ? "name" : field.key === "phone" ? "tel" : "new-password"}
                 type={field.type}
                 value={form[field.key as keyof typeof form]}
                 onChange={update(field.key)}
@@ -68,7 +72,7 @@ export default function SignupPage() {
               />
             </div>
           ))}
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && <p className="text-sm text-red-500" role="alert" aria-live="assertive">{error}</p>}
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? "Creating account..." : "Create Account"}
           </Button>
@@ -79,6 +83,6 @@ export default function SignupPage() {
           <Link href="/login" className="text-primary hover:underline">Sign in</Link>
         </p>
       </Card>
-    </div>
+    </main>
   );
 }

@@ -24,12 +24,16 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def create_access_token(subject: str, extra: Optional[Dict[str, Any]] = None) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(
-        minutes=settings.access_token_expire_minutes
+    """Create an access token while protecting its standard claims from overrides."""
+    payload: Dict[str, Any] = dict(extra or {})
+    payload.update(
+        {
+            "sub": subject,
+            "exp": datetime.now(timezone.utc)
+            + timedelta(minutes=settings.access_token_expire_minutes),
+            "type": "access",
+        }
     )
-    payload = {"sub": subject, "exp": expire, "type": "access"}
-    if extra:
-        payload.update(extra)
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 

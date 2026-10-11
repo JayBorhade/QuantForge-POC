@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,9 +18,17 @@ export default function LoginPage() {
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
   const [needs2fa, setNeeds2fa] = useState(false);
+  const [registeredMessage, setRegisteredMessage] = useState("");
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("registered") === "1") {
+      setRegisteredMessage("Account created. Sign in to continue.");
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
     setError("");
     try {
       await login(email, password, remember, needs2fa ? otp : undefined);
@@ -30,33 +38,34 @@ export default function LoginPage() {
       if (msg === "2FA code required") {
         setNeeds2fa(true);
       } else {
-        setError(msg || "Invalid credentials");
+        setError(msg === "Invalid credentials" ? msg : "Sign-in failed. Check your details and try again.");
       }
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
+    <main id="page-content" tabIndex={-1} className="flex min-h-screen items-center justify-center px-4 outline-none">
       <Card className="w-full max-w-md p-8">
         <div className="mb-8 flex flex-col items-center">
           <Activity className="h-10 w-10 text-primary mb-2" />
           <h1 className="text-2xl font-bold">Welcome back</h1>
           <p className="text-sm text-muted-foreground">Sign in to QuantForge</p>
+          {registeredMessage && <p className="mt-3 text-sm text-emerald-500" role="status" aria-live="polite">{registeredMessage}</p>}
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-sm text-muted-foreground">Email</label>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="mt-1" />
+            <label htmlFor="login-email" className="text-sm text-muted-foreground">Email</label>
+            <Input id="login-email" name="email" autoComplete="username" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="mt-1" />
           </div>
           <div>
-            <label className="text-sm text-muted-foreground">Password</label>
-            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="mt-1" />
+            <label htmlFor="login-password" className="text-sm text-muted-foreground">Password</label>
+            <Input id="login-password" name="password" autoComplete="current-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="mt-1" />
           </div>
           {needs2fa && (
             <div>
-              <label className="text-sm text-muted-foreground">2FA Code</label>
-              <Input value={otp} onChange={(e) => setOtp(e.target.value)} maxLength={6} className="mt-1" />
+              <label htmlFor="login-otp" className="text-sm text-muted-foreground">2FA Code</label>
+              <Input id="login-otp" name="otp" inputMode="numeric" autoComplete="one-time-code" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))} maxLength={6} className="mt-1" />
             </div>
           )}
           <div className="flex items-center justify-between text-sm">
@@ -66,7 +75,7 @@ export default function LoginPage() {
             </label>
             <Link href="/forgot-password" className="text-primary hover:underline">Forgot password?</Link>
           </div>
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && <p className="text-sm text-red-500" role="alert" aria-live="assertive">{error}</p>}
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? "Signing in..." : "Sign In"}
           </Button>
@@ -77,6 +86,6 @@ export default function LoginPage() {
           <Link href="/signup" className="text-primary hover:underline">Sign up</Link>
         </p>
       </Card>
-    </div>
+    </main>
   );
 }

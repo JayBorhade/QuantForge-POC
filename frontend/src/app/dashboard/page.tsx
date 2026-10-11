@@ -28,18 +28,40 @@ interface HistoryPoint {
 export default function DashboardPage() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [history, setHistory] = useState<HistoryPoint[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    dashboardApi.overview().then((r) => setOverview(r.data)).catch(() => setOverview(null));
-    portfolioApi.list().then(async (r) => {
-      const first = r.data?.[0];
-      if (!first) return;
-      const historyResponse = await portfolioApi.history(first.id, 30);
-      setHistory(historyResponse.data?.map((point: HistoryPoint) => ({
-        timestamp: point.timestamp,
-        equity: Number(point.equity),
-      })) ?? []);
-    }).catch(() => setHistory([]));
+    let mounted = true;
+    const load = async () => {
+      try {
+        const response = await dashboardApi.overview();
+        if (mounted) setOverview(response.data);
+      } catch {
+        if (mounted) setError("Dashboard overview could not be loaded.");
+      }
+      try {
+        const response = await portfolioApi.list();
+        const first = Array.isArray(response.data) ? response.data[0] : null;
+        if (first) {
+          const historyResponse = await portfolioApi.history(first.id, 30);
+          if (mounted) {
+            setHistory(Array.isArray(historyResponse.data) ? historyResponse.data.map((point: HistoryPoint) => ({
+              timestamp: point.timestamp,
+              equity: Number(point.equity),
+            })) : []);
+          }
+        } else if (mounted) {
+          setHistory([]);
+        }
+      } catch {
+        if (mounted) setError((current) => current || "Portfolio history could not be loaded.");
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    void load();
+    return () => { mounted = false; };
   }, []);
 
   const stats = overview
@@ -54,9 +76,14 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       <DashboardHeader title="Dashboard Overview" subtitle="Portfolio and strategy performance" />
+      {error && <p className="rounded-lg border border-red-500/30 p-3 text-sm text-red-500" role="alert">{error} <button type="button" className="ml-2 underline" onClick={() => window.location.reload()}>Retry</button></p>}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat, i) => (
+        {loading && stats.length === 0 ? (
+          <Card className="p-6 text-sm text-muted-foreground sm:col-span-2 lg:col-span-4" role="status">Loading dashboard metrics…</Card>
+        ) : stats.length === 0 ? (
+          <Card className="p-6 text-sm text-muted-foreground sm:col-span-2 lg:col-span-4">Dashboard metrics are unavailable.</Card>
+        ) : stats.map((stat, i) => (
           <motion.div key={stat.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
             <Card className="glass-hover p-6">
               <div className="flex items-center justify-between">
@@ -83,8 +110,8 @@ export default function DashboardPage() {
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                No portfolio history recorded yet.
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground" role={loading ? "status" : undefined}>
+                {loading ? "Loading portfolio history…" : error ? "Portfolio history is unavailable." : "No portfolio history recorded yet."}
               </div>
             )}
           </CardContent>
