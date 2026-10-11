@@ -102,9 +102,14 @@ class AngelOneBrokerAdapter:
                     data.get("message") or f"Angel One rejected the order ({response.status_code})"
                 )
             order_id = (data.get("data") or {}).get("orderid") or (data.get("data") or {}).get("uniqueorderid")
-            if not order_id:
-                raise BrokerSubmissionUnknown("Angel One may have accepted the order without returning an order id")
-            return BrokerOrderResult(str(order_id), "submitted")
+            unique_order_id = (data.get("data") or {}).get("uniqueorderid")
+            if not order_id or not unique_order_id:
+                raise BrokerSubmissionUnknown(
+                    "Angel One may have accepted the order without returning complete order identifiers"
+                )
+            return BrokerOrderResult(
+                f"angelone:{order_id}:{unique_order_id}", "submitted"
+            )
 
     @staticmethod
     def _client_tag(client_order_id: str) -> str:
@@ -135,16 +140,31 @@ class AngelOneBrokerAdapter:
                 continue
             filled = Decimal(str(item.get("filledshares", "0")))
             average = Decimal(str(item.get("averageprice", "0")))
+            order_id = item.get("orderid")
+            unique_order_id = item.get("uniqueorderid")
+            if not order_id or not unique_order_id:
+                raise BrokerSubmissionUnknown("Angel One order book returned incomplete order identifiers")
             return BrokerOrderResult(
-                broker_order_id=str(item.get("orderid") or item.get("uniqueorderid")),
+                broker_order_id=f"angelone:{order_id}:{unique_order_id}",
                 status=self._status(str(item.get("orderstatus") or item.get("status", "open"))),
                 filled_quantity=filled,
                 average_fill_price=average if average > 0 else None,
             )
         return None
 
+    @staticmethod
+    def _split_broker_order_id(broker_order_id: str) -> tuple[str, str]:
+        if broker_order_id.startswith("angelone:"):
+            parts = broker_order_id.split(":", 2)
+            if len(parts) == 3 and parts[1] and parts[2]:
+                return parts[1], parts[2]
+            raise ValueError("Invalid Angel One broker order identifier")
+        # Backward compatibility for orders created before composite IDs.
+        return broker_order_id, broker_order_id
+
     async def cancel_order(self, broker_order_id: str) -> None:
-        payload = {"variety": "NORMAL", "orderid": broker_order_id}
+        order_id, _ = self._split_broker_order_id(broker_order_id)
+        payload = {"variety": "NORMAL", "orderid": order_id}
         async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
             response = await client.post(
                 f"{self.BASE_URL}/rest/secure/angelbroking/order/v1/cancelOrder",
@@ -157,9 +177,10 @@ class AngelOneBrokerAdapter:
                 raise RuntimeError(data.get("message") or "Angel One cancellation failed")
 
     async def get_order(self, broker_order_id: str) -> BrokerOrderResult:
+        _, unique_order_id = self._split_broker_order_id(broker_order_id)
         async with httpx.AsyncClient(timeout=self._TIMEOUT) as client:
             response = await client.get(
-                f"{self.BASE_URL}/rest/secure/angelbroking/order/v1/details/{broker_order_id}",
+                f"{self.BASE_URL}/rest/secure/angelbroking/order/v1/details/{unique_order_id}",
                 headers=self._headers(),
             )
             response.raise_for_status()
