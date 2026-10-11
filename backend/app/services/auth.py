@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from user_agents import parse as parse_ua
 
 from app.core.config import get_settings
+from app.core.encryption import decrypt_mfa_secret
 from app.core.sanitize import sanitize_email, sanitize_phone, sanitize_string
 from app.core.security import (
     create_access_token,
@@ -111,7 +112,7 @@ class AuthService:
         if user.two_factor_enabled:
             if not otp_code:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="2FA code required")
-            totp = pyotp.TOTP(user.two_factor_secret)
+            totp = pyotp.TOTP(decrypt_mfa_secret(user.two_factor_secret))
             if not totp.verify(otp_code, valid_window=1):
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid 2FA code")
 
