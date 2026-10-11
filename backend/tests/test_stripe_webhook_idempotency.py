@@ -102,5 +102,68 @@ class StripeWebhookIdempotencyTests(unittest.TestCase):
         db.add.assert_not_called()
 
 
+    def test_unpaid_checkout_does_not_activate_subscription(self):
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=Result(None))
+        event = {
+            "id": "evt_unpaid_checkout",
+            "type": "checkout.session.completed",
+            "data": {
+                "metadata": {"user_id": "00000000-0000-0000-0000-000000000001", "plan": "pro"},
+                "customer": "cus_test",
+                "subscription": "sub_test",
+                "payment_status": "unpaid",
+            },
+        }
+        with patch("app.api.routes.billing.stripe_enabled", return_value=True), patch(
+            "app.api.routes.billing.handle_webhook_event", return_value=event
+        ), patch("app.api.routes.billing._update_subscription", new=AsyncMock()) as update:
+            response = asyncio.run(stripe_webhook(request(), db))
+        self.assertEqual(response, {"received": True})
+        update.assert_not_awaited()
+
+    def test_paid_checkout_activates_only_known_plan(self):
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=Result(None))
+        event = {
+            "id": "evt_paid_checkout",
+            "type": "checkout.session.completed",
+            "data": {
+                "metadata": {"user_id": "00000000-0000-0000-0000-000000000001", "plan": "pro"},
+                "customer": "cus_test",
+                "subscription": "sub_test",
+                "payment_status": "paid",
+            },
+        }
+        with patch("app.api.routes.billing.stripe_enabled", return_value=True), patch(
+            "app.api.routes.billing.handle_webhook_event", return_value=event
+        ), patch("app.api.routes.billing._update_subscription", new=AsyncMock()) as update:
+            response = asyncio.run(stripe_webhook(request(), db))
+        self.assertEqual(response, {"received": True})
+        update.assert_awaited_once()
+        self.assertEqual(update.await_args.args[2], "pro")
+
+    def test_unknown_subscription_status_fails_closed(self):
+        db = AsyncMock()
+        subscription = SimpleNamespace()
+        db.execute = AsyncMock(side_effect=[Result(None), Result(subscription)])
+        event = {
+            "id": "evt_unknown_status",
+            "type": "customer.subscription.updated",
+            "data": {
+                "customer": "cus_test",
+                "status": "future_unknown_state",
+                "id": "sub_test",
+                "items": {"data": [{"price": {"id": "price_pro"}}]},
+            },
+        }
+        with patch("app.api.routes.billing.stripe_enabled", return_value=True), patch(
+            "app.api.routes.billing.handle_webhook_event", return_value=event
+        ), patch("app.api.routes.billing.map_stripe_plan", return_value="pro"):
+            response = asyncio.run(stripe_webhook(request(), db))
+        self.assertEqual(response, {"received": True})
+        self.assertEqual(subscription.status.value, "expired")
+
+
 if __name__ == "__main__":
     unittest.main()
