@@ -117,6 +117,23 @@ class Settings(BaseSettings):
             raise ValueError("COOKIE_SECURE must be true when COOKIE_SAMESITE is none")
         if self.csrf_enabled is not True:
             raise ValueError("CSRF_ENABLED must remain true outside local/test environments")
+
+        if not self.smtp_host.strip() or not self.smtp_user.strip() or not self.smtp_password:
+            raise ValueError("SMTP_HOST, SMTP_USER, and SMTP_PASSWORD are required outside local/test environments")
+
+        stripe_enabled = any((
+            self.stripe_secret_key.strip(),
+            self.stripe_webhook_secret.strip(),
+            self.stripe_price_starter.strip(),
+            self.stripe_price_pro.strip(),
+        ))
+        if stripe_enabled:
+            if not self.stripe_secret_key.startswith(("sk_test_", "sk_live_")):
+                raise ValueError("STRIPE_SECRET_KEY must be a valid configured Stripe secret when billing is enabled")
+            if not self.stripe_webhook_secret.startswith("whsec_") or len(self.stripe_webhook_secret) < 20:
+                raise ValueError("STRIPE_WEBHOOK_SECRET must be configured when Stripe billing is enabled")
+            if not self.stripe_price_starter or not self.stripe_price_pro:
+                raise ValueError("Stripe starter and pro price IDs are required when billing is enabled")
         return self
 
     @property
