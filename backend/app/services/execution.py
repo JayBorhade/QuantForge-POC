@@ -86,6 +86,7 @@ class ExecutionService:
                 quantity=quantity,
                 estimated_price=risk_price,
                 strategy_id=strategy_id,
+                require_limits=mode is ExecutionMode.LIVE,
             )
         except RiskRejected as exc:
             await log_audit(
