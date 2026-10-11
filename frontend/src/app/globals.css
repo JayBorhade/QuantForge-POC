@@ -132,6 +132,18 @@
   opacity: 0.55;
 }
 
+.back-to-top {
+  bottom: calc(1.25rem + env(safe-area-inset-bottom));
+}
+
+.back-to-top--marketing {
+  bottom: calc(5rem + env(safe-area-inset-bottom));
+}
+
+.floating-contact {
+  bottom: calc(1.25rem + env(safe-area-inset-bottom));
+}
+
 html:not(.dark) .border-white\/5,
 html:not(.dark) .border-white\/10 {
   border-color: hsl(var(--border));
