@@ -160,26 +160,45 @@ class AuthService:
 
         jti = payload.get("jti")
         user_id = payload.get("sub")
+        try:
+            parsed_user_id = uuid.UUID(str(user_id))
+        except (TypeError, ValueError, AttributeError):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+        if not isinstance(jti, str) or not jti:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
 
+        # Lock the session row while rotating it. Concurrent refresh attempts
+        # serialize on databases that support row-level locks, so only one
+        # request can consume a refresh token.
         result = await db.execute(
-            select(UserSession).where(
+            select(UserSession)
+            .where(
                 UserSession.refresh_token_jti == jti,
+                UserSession.user_id == parsed_user_id,
                 UserSession.is_active == True,
             )
+            .with_for_update()
         )
         session = result.scalar_one_or_none()
-        if not session or session.expires_at < datetime.now(timezone.utc):
+        if not session or session.expires_at <= datetime.now(timezone.utc):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired")
 
+        user_result = await db.execute(select(User).where(User.id == parsed_user_id))
+        user = user_result.scalar_one_or_none()
+        if not user or not user.is_active or user.is_banned:
+            session.is_active = False
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Account unavailable")
+
         session.is_active = False
+        session.last_used_at = datetime.now(timezone.utc)
         new_jti = generate_token()[:32]
-        new_refresh = create_refresh_token(user_id, new_jti)
-        new_access = create_access_token(user_id, {"session_jti": new_jti})
+        new_refresh = create_refresh_token(str(parsed_user_id), new_jti)
+        new_access = create_access_token(str(parsed_user_id), {"role": user.role.value, "session_jti": new_jti})
 
         ua_string = request.headers.get("user-agent", "")
         ua = parse_ua(ua_string)
         new_session = UserSession(
-            user_id=uuid.UUID(user_id),
+            user_id=parsed_user_id,
             refresh_token_jti=new_jti,
             device_name=session.device_name,
             device_type=session.device_type,
