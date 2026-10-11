@@ -92,3 +92,17 @@ These changes require the latest PR CI run to pass. They do not close the RLS, c
 
 
 - Billing plan descriptions no longer advertise live trading, AI insights, unlimited strategies, or priority support without verified implementation/enforcement. Live broker execution remains disabled; paper trading/backtesting is the product boundary.
+
+
+### Additional Phase 2 / Phase 4 follow-up (latest candidate)
+- Backtest failures now commit the terminal FAILED state before re-raising; otherwise the sync session's exception handler would roll the status update back.
+- Historical market data now normalizes yfinance's reset-index date column to `date`, loads a 120-calendar-day warm-up for indicators such as EMA-50, and restricts simulation to the requested date window.
+- RSI cooldown suppresses new entries only; stop-loss and exit checks continue on every bar while a position is open.
+- Celery sync database sessions use `NullPool` to avoid persistent worker-held connection pools.
+- Strategy creation and PATCH now validate parameter allowlists, numeric finiteness/ranges, EMA ordering, and session-time formats.
+- Portfolio creation rejects non-finite capital and validates currency codes; interactive API docs/OpenAPI are disabled outside local/test environments.
+- Added regression tests for market-data date normalization, RSI exit safety, and strategy parameter validation.
+- Added a UTC-midnight Celery task to reset the portfolio daily P&L accumulator.
+- Compose database health-check variables are escaped so they are expanded inside the container shell, not by the host Compose parser.
+
+These latest changes require the next CI/migration/security run to pass. RLS and environment-backed release gates remain unresolved.
