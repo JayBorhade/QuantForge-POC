@@ -66,8 +66,8 @@ class ExecutionService:
                 raise ValueError(f"{label} must be finite and positive")
         if not symbol.strip():
             raise ValueError("Order symbol is required")
-        if not client_order_id or len(client_order_id) > 64:
-            raise ValueError("client_order_id must contain 1 to 64 characters")
+        if not client_order_id or len(client_order_id) > 36:
+            raise ValueError("client_order_id must contain 1 to 36 characters for cross-broker compatibility")
         if mode is ExecutionMode.LIVE:
             if self.broker is None:
                 raise ValueError("Live execution requires an approved broker executor")
