@@ -27,7 +27,9 @@ interface HistoryPoint {
 
 export default function DashboardPage() {
   const [overview, setOverview] = useState<Overview | null>(null);
-  const [history, setHistory] = useState<HistoryPoint[]>([]);\n  const [loading, setLoading] = useState(true);\n  const [error, setError] = useState("");
+  const [history, setHistory] = useState<HistoryPoint[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     let mounted = true;
