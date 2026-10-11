@@ -1,0 +1,171 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { ArrowUp, Search, Sun, Moon, X, ExternalLink } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+
+const searchablePages = [
+  { title: "Home", href: "/", description: "QuantForge overview and platform introduction" },
+  { title: "Features", href: "/features", description: "Strategy builder, backtesting, broker adapters, risk management and analytics" },
+  { title: "Pricing", href: "/pricing", description: "Plans, billing and subscription information" },
+  { title: "Documentation", href: "/docs", description: "Quick start, authentication and built-in strategies" },
+  { title: "Blog", href: "/blog", description: "Product articles and updates" },
+  { title: "Contact", href: "/contact", description: "Contact and support information" },
+  { title: "Log in", href: "/login", description: "Sign in to your QuantForge account" },
+  { title: "Create account", href: "/signup", description: "Register a QuantForge account" },
+  { title: "Dashboard", href: "/dashboard", description: "Portfolio overview and trading workspace" },
+  { title: "Strategies", href: "/dashboard/strategies", description: "Create and manage trading strategies" },
+  { title: "Backtesting", href: "/dashboard/backtest", description: "Run backtests and review strategy results" },
+  { title: "Portfolio", href: "/dashboard/portfolio", description: "Portfolio valuation and performance analytics" },
+  { title: "Risk", href: "/dashboard/risk", description: "Risk limits, exposure and risk events" },
+  { title: "Broker connections", href: "/dashboard/brokers", description: "Manage connected broker integrations" },
+  { title: "Settings", href: "/dashboard/settings", description: "Account and application settings" },
+];
+
+export function ProductUxControls() {
+  const pathname = usePathname();
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [showTop, setShowTop] = useState(false);
+  const [consentNotice, setConsentNotice] = useState(false);
+  const isMarketing = !pathname.startsWith("/dashboard") && pathname !== "/admin";
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("quantforge-theme");
+    const initial = stored === "light" || stored === "dark"
+      ? stored
+      : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    setTheme(initial);
+    document.documentElement.classList.toggle("dark", initial === "dark");
+    document.documentElement.style.colorScheme = initial;
+  }, []);
+
+  useEffect(() => {
+    const onScroll = () => setShowTop(window.scrollY > 480);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const allowed = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"];
+    const current = Object.fromEntries(
+      allowed.flatMap((key) => {
+        const value = params.get(key)?.trim();
+        return value && value.length <= 200 ? [[key, value]] : [];
+      })
+    );
+    if (Object.keys(current).length && !window.sessionStorage.getItem("quantforge-utm-first-touch")) {
+      window.sessionStorage.setItem("quantforge-utm-first-touch", JSON.stringify(current));
+    }
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSearchOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [searchOpen]);
+
+  const results = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return searchablePages.slice(0, 6);
+    return searchablePages.filter((page) =>
+      `${page.title} ${page.description} ${page.href}`.toLowerCase().includes(term)
+    ).slice(0, 8);
+  }, [query]);
+
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    document.documentElement.classList.toggle("dark", next === "dark");
+    document.documentElement.style.colorScheme = next;
+    window.localStorage.setItem("quantforge-theme", next);
+  };
+
+  return (
+    <>
+      <a href="#main-content" className="skip-link">Skip to content</a>
+      <div className="fixed right-4 top-20 z-[60] flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => { setSearchOpen(true); setQuery(""); }}
+          aria-label="Search site"
+          title="Search site"
+          className="ux-icon-button"
+        >
+          <Search aria-hidden="true" className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={toggleTheme}
+          aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          className="ux-icon-button"
+        >
+          {theme === "dark" ? <Sun aria-hidden="true" className="h-4 w-4" /> : <Moon aria-hidden="true" className="h-4 w-4" />}
+        </button>
+      </div>
+
+      {searchOpen && (
+        <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/60 px-4 pt-[12vh]" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSearchOpen(false); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="site-search-title" className="w-full max-w-xl overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <Search aria-hidden="true" className="h-5 w-5 text-muted-foreground" />
+              <h2 id="site-search-title" className="sr-only">Search QuantForge</h2>
+              <input
+                autoFocus
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search pages and features…"
+                aria-label="Search pages and features"
+                className="min-w-0 flex-1 bg-transparent py-2 text-sm outline-none"
+              />
+              <button type="button" className="ux-icon-button" aria-label="Close search" onClick={() => setSearchOpen(false)}><X className="h-4 w-4" /></button>
+            </div>
+            <div className="mt-3 max-h-[55vh] overflow-y-auto" aria-live="polite">
+              {results.length ? results.map((page) => (
+                <Link key={page.href} href={page.href} onClick={() => setSearchOpen(false)} className="block rounded-lg px-3 py-3 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <span className="block text-sm font-medium">{page.title}</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">{page.description}</span>
+                </Link>
+              )) : <p className="px-3 py-6 text-sm text-muted-foreground">No matching pages. Try a different search term.</p>}
+            </div>
+            <p className="mt-2 border-t border-border pt-3 text-xs text-muted-foreground">Searches public pages and known app destinations. Private records are not indexed.</p>
+          </section>
+        </div>
+      )}
+
+      {showTop && (
+        <button
+          type="button"
+          className={`fixed bottom-5 right-5 z-40 ux-icon-button shadow-lg ${isMarketing ? "bottom-20" : ""}`}
+          aria-label="Back to top"
+          title="Back to top"
+          onClick={() => window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })}
+        >
+          <ArrowUp aria-hidden="true" className="h-4 w-4" />
+        </button>
+      )}
+
+      {isMarketing && (
+        <Link href="/contact" className="fixed bottom-5 right-5 z-30 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-card px-4 py-3 text-sm font-medium shadow-lg hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          Contact <ExternalLink aria-hidden="true" className="h-4 w-4" />
+        </Link>
+      )}
+
+      {consentNotice && (
+        <div className="fixed bottom-4 left-4 z-[80] max-w-sm rounded-xl border border-border bg-card p-4 shadow-xl" role="status">
+          <p className="text-sm font-medium">Privacy preferences</p>
+          <p className="mt-1 text-xs text-muted-foreground">This app currently uses essential session/security cookies only. No optional analytics service is configured here.</p>
+          <button type="button" onClick={() => setConsentNotice(false)} className="mt-3 text-sm text-primary underline">Dismiss</button>
+        </div>
+      )}
+    </>
+  );
+}
