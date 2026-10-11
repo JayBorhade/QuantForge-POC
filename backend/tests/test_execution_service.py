@@ -44,7 +44,7 @@ class ExecutionValidationTests(unittest.TestCase):
         owner_result.scalar_one_or_none.return_value = type(
             "U", (), {"is_verified": True, "two_factor_enabled": True}
         )()
-        db.execute.side_effect = [owner_result, query_result, MagicMock()]
+        db.execute.side_effect = [owner_result, query_result, MagicMock(), query_result]
         broker = AsyncMock()
 
         async def uncertain_submit(*args, **kwargs):
