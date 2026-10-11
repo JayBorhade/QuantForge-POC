@@ -99,7 +99,8 @@ def run_backtest_for_strategy(
             if "error" in result:
                 run.status = RunStatus.FAILED
                 run.identity_key = None
-                run.error_message = result["error"]
+                run.error_message = str(result["error"])[:2000]
+                run.completed_at = datetime.now(timezone.utc)
             else:
                 run.status = RunStatus.COMPLETED
                 run.sharpe_ratio = Decimal(str(result.get("sharpe_ratio", 0)))
