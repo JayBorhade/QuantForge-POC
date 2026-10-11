@@ -1,5 +1,6 @@
 """Strategy management routes."""
 
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import List
@@ -21,6 +22,8 @@ from app.schemas.strategy import (
 from app.services.audit import log_audit
 from app.services.backtest_runner import run_backtest_for_strategy
 from app.backtesting.fingerprint import configuration_fingerprint
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/strategies", tags=["Strategies"])
 
@@ -307,22 +310,23 @@ async def start_strategy(strategy_id: uuid.UUID, current_user: CurrentUser, db: 
             detail="Live execution is not enabled yet. Use paper mode until broker execution is implemented.",
         )
 
+    previous_status = strategy.status
     strategy.status = StrategyStatus.ACTIVE
-    mode = "paper"
     try:
         from app.tasks.strategy_tasks import run_strategy_task
 
-        run_strategy_task.delay(str(strategy.id), mode)
-    except Exception:
-        from strategies.engine import StrategyEngine
+        run_strategy_task.delay(str(strategy.id), "paper")
+    except Exception as exc:
+        # Evaluating a signal synchronously is not equivalent to starting the
+        # canonical paper-execution worker. Never report success when enqueueing
+        # failed, and restore the status within this transaction.
+        strategy.status = previous_status
+        logger.exception("Unable to enqueue strategy start for %s", strategy.id)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Strategy runtime queue is unavailable; strategy was not started",
+        ) from exc
 
-        engine = StrategyEngine()
-        engine.execute_strategy(
-            strategy.strategy_type.value,
-            strategy.symbol,
-            strategy.parameters or {},
-            mode,
-        )
     return {"message": "Strategy started", "strategy_id": str(strategy.id)}
 
 
