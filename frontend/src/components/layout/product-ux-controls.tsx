@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowUp, Search, Sun, Moon, X, ExternalLink } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const searchablePages = [
   { title: "Home", href: "/", description: "QuantForge overview and platform introduction" },
@@ -30,6 +30,9 @@ export function ProductUxControls() {
   const [query, setQuery] = useState("");
   const [showTop, setShowTop] = useState(false);
   const [progress, setProgress] = useState(0);
+  const searchDialogRef = useRef<HTMLElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
   const isMarketing = !pathname.startsWith("/dashboard") && pathname !== "/admin";
   const hasReadingProgress = pathname === "/docs" || pathname.startsWith("/blog");
 
@@ -59,9 +62,31 @@ export function ProductUxControls() {
   }, [pathname]);
 
   useEffect(() => {
-    if (!searchOpen) return;
+    if (!searchOpen) {
+      previousFocusRef.current?.focus();
+      return;
+    }
+    searchInputRef.current?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setSearchOpen(false);
+      if (event.key === "Escape") {
+        setSearchOpen(false);
+        return;
+      }
+      if (event.key === "Tab" && searchDialogRef.current) {
+        const focusable = Array.from(
+          searchDialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')
+        );
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -109,7 +134,7 @@ export function ProductUxControls() {
       )}
 
       <div className="fixed right-4 top-20 z-[60] flex items-center gap-2">
-        <button type="button" onClick={() => { setSearchOpen(true); setQuery(""); }} aria-label="Search site" title="Search site" className="ux-icon-button">
+        <button type="button" onClick={(event) => { previousFocusRef.current = event.currentTarget; setSearchOpen(true); setQuery(""); }} aria-label="Search site" title="Search site" className="ux-icon-button">
           <Search aria-hidden="true" className="h-4 w-4" />
         </button>
         <button type="button" onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} className="ux-icon-button">
@@ -119,11 +144,11 @@ export function ProductUxControls() {
 
       {searchOpen && (
         <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/60 px-4 pt-[12vh]" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSearchOpen(false); }}>
-          <section role="dialog" aria-modal="true" aria-labelledby="site-search-title" className="w-full max-w-xl overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-2xl">
+          <section ref={searchDialogRef} role="dialog" aria-modal="true" aria-labelledby="site-search-title" className="w-full max-w-xl overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-2xl">
             <div className="flex items-center gap-3">
               <Search aria-hidden="true" className="h-5 w-5 text-muted-foreground" />
               <h2 id="site-search-title" className="sr-only">Search QuantForge</h2>
-              <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search pages and features…" aria-label="Search pages and features" className="min-w-0 flex-1 bg-transparent py-2 text-sm outline-none" />
+              <input ref={searchInputRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search pages and features…" aria-label="Search pages and features" className="min-w-0 flex-1 bg-transparent py-2 text-sm outline-none" />
               <button type="button" className="ux-icon-button" aria-label="Close search" onClick={() => setSearchOpen(false)}><X aria-hidden="true" className="h-4 w-4" /></button>
             </div>
             <div className="mt-3 max-h-[55vh] overflow-y-auto" aria-live="polite">
