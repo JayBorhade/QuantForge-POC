@@ -59,6 +59,7 @@ class ExecutionValidationTests(unittest.TestCase):
                     quantity=Decimal("1"),
                     mode=ExecutionMode.LIVE,
                     client_order_id="test-unknown",
+                    estimated_price=Decimal("100"),
                 ))
 
         created_order = next(call.args[0] for call in db.add.call_args_list if call.args)
