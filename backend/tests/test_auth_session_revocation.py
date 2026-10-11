@@ -128,18 +128,17 @@ class SessionBoundAccessTokenTests(unittest.TestCase):
         self.assertEqual(error.exception.status_code, 401)
         self.assertEqual(db.execute.await_count, 1)
 
-    def test_legacy_access_token_remains_valid_until_expiry(self):
+    def test_legacy_access_token_without_session_binding_is_rejected(self):
         user_id = uuid.uuid4()
-        user = SimpleNamespace(id=user_id, is_active=True, is_banned=False)
         db = AsyncMock()
-        db.execute = AsyncMock(return_value=ScalarResult(user))
         request = SimpleNamespace(headers={})
         token = create_access_token(str(user_id))
 
-        resolved = asyncio.run(get_current_user(request, db, token))
+        with self.assertRaises(HTTPException) as error:
+            asyncio.run(get_current_user(request, db, token))
 
-        self.assertIs(resolved, user)
-        db.execute.assert_awaited_once()
+        self.assertEqual(error.exception.status_code, 401)
+        db.execute.assert_not_awaited()
 
 
 if __name__ == "__main__":
