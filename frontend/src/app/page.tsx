@@ -2,10 +2,8 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, BarChart3, Bot, Brain, LineChart, Shield, Zap } from "lucide-react";
+import { ArrowRight, BarChart3, Bot, Brain, LineChart, Shield, Zap, FlaskConical, Settings2 } from "lucide-react";
 import { Navbar } from "@/components/layout/navbar";
-import { HeroChart } from "@/components/landing/hero-chart";
-import { MarketTicker } from "@/components/landing/market-ticker";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -36,8 +34,6 @@ export default function LandingPage() {
     <div className="min-h-screen">
       <Navbar />
       <main id="page-content" tabIndex={-1} className="outline-none">
-        <MarketTicker />
-
         <section className="relative px-4 pb-24 pt-32 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
             <div className="grid items-center gap-12 lg:grid-cols-2">
@@ -57,7 +53,29 @@ export default function LandingPage() {
                   <Link href="/docs"><Button variant="outline" size="lg">View documentation</Button></Link>
                 </div>
               </motion.div>
-              <HeroChart />
+
+              <Card className="p-6 sm:p-8">
+                <p className="text-sm font-semibold text-primary">Workspace overview</p>
+                <h2 className="mt-2 text-2xl font-bold">A connected research workflow</h2>
+                <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                  Explore the application's real strategy, testing, portfolio, risk, and integration modules. This preview intentionally contains no simulated prices or performance figures.
+                </p>
+                <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                  {[
+                    { icon: Bot, label: "Strategy builder" },
+                    { icon: FlaskConical, label: "Backtesting" },
+                    { icon: BarChart3, label: "Portfolio analytics" },
+                    { icon: Shield, label: "Risk controls" },
+                    { icon: Zap, label: "Broker adapters" },
+                    { icon: Settings2, label: "Deployment settings" },
+                  ].map((item) => (
+                    <div key={item.label} className="flex items-center gap-3 rounded-lg border border-border bg-secondary/40 p-3">
+                      <item.icon aria-hidden="true" className="h-5 w-5 shrink-0 text-primary" />
+                      <span className="text-sm font-medium">{item.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
             </div>
           </div>
         </section>
@@ -99,9 +117,7 @@ export default function LandingPage() {
                 <Card key={pillar.title} className="glass-hover flex h-full flex-col p-6">
                   <h3 className="text-lg font-semibold">{pillar.title}</h3>
                   <p className="mt-3 flex-1 text-sm text-muted-foreground">{pillar.description}</p>
-                  <Link href={pillar.href} className="mt-6">
-                    <Button variant="outline" className="w-full">{pillar.action}</Button>
-                  </Link>
+                  <Link href={pillar.href} className="mt-6"><Button variant="outline" className="w-full">{pillar.action}</Button></Link>
                 </Card>
               ))}
             </div>
