@@ -1,4 +1,9 @@
-"""Regression tests for tenant-scoped portfolio and strategy lookups."""
+"""Regression tests for tenant-scoped resource lookups.
+
+These tests are deliberately explicit about both the resource identifier and
+owner identifier. They are SQL-shape tests, not substitutes for PostgreSQL
+integration tests or end-to-end two-account API tests.
+"""
 import unittest
 import uuid
 from unittest.mock import AsyncMock, MagicMock
@@ -12,7 +17,7 @@ from app.api.routes.risk import _get_portfolio as _get_risk_portfolio
 
 
 class ResourceOwnershipGuardTests(unittest.IsolatedAsyncioTestCase):
-    async def _assert_not_found_and_scoped(self, lookup, model_name):
+    async def _assert_not_found_and_scoped(self, lookup, table_name):
         resource_id = uuid.uuid4()
         owner_id = uuid.uuid4()
         db = AsyncMock()
@@ -25,13 +30,18 @@ class ResourceOwnershipGuardTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(raised.exception.status_code, 404)
         statement = db.execute.await_args.args[0]
-        compiled = str(statement.compile(compile_kwargs={"literal_binds": False}))
-        normalized = " ".join(compiled.lower().split())
-        self.assertIn(f"from {model_name}", normalized)
-        # The resource lookup must constrain both the requested identifier and
-        # the authenticated owner's identifier, preventing cross-tenant reads.
-        self.assertIn("user_id", normalized)
-        self.assertIn(" and ", normalized)
+        compiled = statement.compile()
+        normalized_sql = " ".join(str(compiled).lower().split())
+        self.assertIn(f"from {table_name}", normalized_sql)
+
+        # Confirm both tenant owner and requested resource are actual bound
+        # values, rather than merely checking that a column name appears.
+        predicates = " ".join(normalized_sql.split(" where ", 1)[1:])
+        self.assertIn("user_id", predicates)
+        self.assertIn("id", predicates)
+        bound_values = list(compiled.params.values())
+        self.assertIn(resource_id, bound_values)
+        self.assertIn(owner_id, bound_values)
 
     async def test_portfolio_lookup_is_owner_scoped_and_hides_foreign_resource(self):
         await self._assert_not_found_and_scoped(_get_portfolio, "portfolios")
