@@ -79,3 +79,10 @@ These changes require the latest PR CI run to pass. They do not close the RLS, c
 - Backtest run status and audit event are committed before Celery dispatch to eliminate the uncommitted-row worker race.
 - Synthetic AI sentiment based on hard-coded headlines and pseudo-random social scores has been removed. The strategy now fails closed until a real provider is configured.
 - New focused tests cover these behaviors. Latest CI has been triggered and must pass before considering these source changes validated.
+
+
+### Infrastructure and notification follow-up (latest candidate)
+- Production config now rejects missing SMTP credentials and incomplete/placeholder Stripe configuration when billing is enabled.
+- Notification tasks use the real email service and return actual delivery state; they no longer report `sent: true` when no email was sent.
+- Backend container runs as non-root; migrations are a distinct Compose job; Redis requires authentication; local launch replaces placeholder secrets; Docker build context excludes environment files and key material.
+- These changes are pending latest CI. Redis outage/distributed behavior and SMTP/provider delivery still require staging validation.
