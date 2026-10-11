@@ -30,7 +30,7 @@ export default function ContactPage() {
       setNotice({ kind: "error", text: "Complete all required fields before continuing." });
       return;
     }
-    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setNotice({ kind: "error", text: "Enter a valid reply email address." });
       return;
     }
