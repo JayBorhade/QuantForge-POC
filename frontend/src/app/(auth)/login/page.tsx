@@ -36,7 +36,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
+    <main id="page-content" tabIndex={-1} className="flex min-h-screen items-center justify-center px-4 outline-none">
       <Card className="w-full max-w-md p-8">
         <div className="mb-8 flex flex-col items-center">
           <Activity className="h-10 w-10 text-primary mb-2" />
@@ -77,6 +77,6 @@ export default function LoginPage() {
           <Link href="/signup" className="text-primary hover:underline">Sign up</Link>
         </p>
       </Card>
-    </div>
+    </main>
   );
 }
