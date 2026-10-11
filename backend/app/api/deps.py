@@ -79,6 +79,18 @@ async def get_current_user(
     return user
 
 
+async def get_verified_user(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    """Require verified email before financial or externally consequential actions."""
+    if not current_user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Verify your email before performing this action",
+        )
+    return current_user
+
+
 async def get_current_admin(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> User:
@@ -88,5 +100,6 @@ async def get_current_admin(
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+VerifiedUser = Annotated[User, Depends(get_verified_user)]
 CurrentAdmin = Annotated[User, Depends(get_current_admin)]
 DbSession = Annotated[AsyncSession, Depends(get_db)]
