@@ -40,7 +40,7 @@ class AccountRateLimitTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_distributed_limit_returns_429_after_limit(self):
         client = AsyncMock()
-        client.pipeline.return_value = FakePipeline([3, True])
+        client.eval.return_value = 3
         client.ttl.return_value = 30
         with patch("app.core.rate_limit.settings", SimpleNamespace(app_env="production", redis_url="redis://redis")), patch(
             "app.core.rate_limit.Redis.from_url", return_value=client
@@ -53,7 +53,7 @@ class AccountRateLimitTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_redis_outage_fails_closed(self):
         client = AsyncMock()
-        client.pipeline.return_value = FakePipeline(error=RuntimeError("redis down"))
+        client.eval.side_effect = RuntimeError("redis down")
         with patch("app.core.rate_limit.settings", SimpleNamespace(app_env="production", redis_url="redis://redis")), patch(
             "app.core.rate_limit.Redis.from_url", return_value=client
         ):
