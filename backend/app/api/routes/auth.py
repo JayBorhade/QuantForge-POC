@@ -12,7 +12,7 @@ from app.core.config import get_settings
 from app.core.csrf import set_csrf_cookie
 from app.core.encryption import encrypt_mfa_secret
 from app.core.security import decode_token, generate_token, hash_one_time_token, hash_password
-from app.core.rate_limit import limiter
+from app.core.rate_limit import enforce_account_rate_limit, limiter
 from app.models.user import User
 from app.schemas.auth import (
     ForgotPasswordRequest,
@@ -71,6 +71,7 @@ def clear_auth_cookies(response: Response) -> None:
 @router.post("/signup", status_code=status.HTTP_202_ACCEPTED)
 @limiter.limit("5/minute")
 async def signup(data: SignupRequest, request: Request, db: DbSession, background_tasks: BackgroundTasks):
+    await enforce_account_rate_limit(data.email, "signup", limit=5, window_seconds=3600)
     # Keep the raw verification token only in the outbound email; the DB stores
     # only its SHA-256 digest. Return the same response for existing/new accounts
     # to avoid disclosing whether an email address is registered.
@@ -91,6 +92,7 @@ async def signup(data: SignupRequest, request: Request, db: DbSession, backgroun
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("5/minute")
 async def login(data: LoginRequest, request: Request, response: Response, db: DbSession):
+    await enforce_account_rate_limit(data.email, "login", limit=10, window_seconds=300)
     user, access_token, refresh_token = await AuthService.authenticate(
         db, data.email, data.password, data.remember_me, request, data.otp_code
     )
@@ -143,6 +145,7 @@ async def get_me(current_user: CurrentUser):
 @router.post("/forgot-password")
 @limiter.limit("3/minute")
 async def forgot_password(data: ForgotPasswordRequest, db: DbSession, request: Request):
+    await enforce_account_rate_limit(data.email, "forgot-password", limit=3, window_seconds=3600)
     result = await db.execute(select(User).where(User.email == data.email.lower()))
     user = result.scalar_one_or_none()
     if user:
@@ -157,6 +160,7 @@ async def forgot_password(data: ForgotPasswordRequest, db: DbSession, request: R
 @router.post("/reset-password")
 @limiter.limit("5/minute")
 async def reset_password(data: ResetPasswordRequest, db: DbSession, request: Request):
+    await enforce_account_rate_limit(data.token, "reset-password", limit=5, window_seconds=3600)
     result = await db.execute(
         select(User).where(
             User.password_reset_token == hash_one_time_token(data.token),
@@ -188,6 +192,7 @@ async def resend_verification(
     db: DbSession,
     background_tasks: BackgroundTasks,
 ):
+    await enforce_account_rate_limit(data.email, "resend-verification", limit=3, window_seconds=3600)
     """Resend verification without revealing whether an email is registered."""
     result = await db.execute(select(User).where(User.email == data.email.lower()))
     user = result.scalar_one_or_none()
@@ -204,6 +209,7 @@ async def resend_verification(
 @router.post("/verify-email")
 @limiter.limit("10/minute")
 async def verify_email(data: VerifyEmailRequest, request: Request, db: DbSession):
+    await enforce_account_rate_limit(data.token, "verify-email", limit=10, window_seconds=3600)
     result = await db.execute(
         select(User).where(
             User.email_verification_token == hash_one_time_token(data.token),
