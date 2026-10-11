@@ -30,7 +30,7 @@ export default function LoginPage() {
       if (msg === "2FA code required") {
         setNeeds2fa(true);
       } else {
-        setError(msg || "Invalid credentials");
+        setError(msg === "Invalid credentials" ? msg : "Sign-in failed. Check your details and try again.");
       }
     }
   };
@@ -46,17 +46,17 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-sm text-muted-foreground">Email</label>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="mt-1" />
+            <label htmlFor="login-email" className="text-sm text-muted-foreground">Email</label>
+            <Input id="login-email" name="email" autoComplete="username" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="mt-1" />
           </div>
           <div>
-            <label className="text-sm text-muted-foreground">Password</label>
-            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="mt-1" />
+            <label htmlFor="login-password" className="text-sm text-muted-foreground">Password</label>
+            <Input id="login-password" name="password" autoComplete="current-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="mt-1" />
           </div>
           {needs2fa && (
             <div>
-              <label className="text-sm text-muted-foreground">2FA Code</label>
-              <Input value={otp} onChange={(e) => setOtp(e.target.value)} maxLength={6} className="mt-1" />
+              <label htmlFor="login-otp" className="text-sm text-muted-foreground">2FA Code</label>
+              <Input id="login-otp" name="otp" inputMode="numeric" autoComplete="one-time-code" value={otp} onChange={(e) => setOtp(e.target.value)} maxLength={6} className="mt-1" />
             </div>
           )}
           <div className="flex items-center justify-between text-sm">
@@ -66,7 +66,7 @@ export default function LoginPage() {
             </label>
             <Link href="/forgot-password" className="text-primary hover:underline">Forgot password?</Link>
           </div>
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && <p className="text-sm text-red-500" role="alert" aria-live="assertive">{error}</p>}
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? "Signing in..." : "Sign In"}
           </Button>
