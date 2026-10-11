@@ -42,6 +42,7 @@ class User(Base):
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     two_factor_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     last_totp_step: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    two_factor_recovery_codes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     two_factor_secret: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     avatar_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     email_verification_token: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
