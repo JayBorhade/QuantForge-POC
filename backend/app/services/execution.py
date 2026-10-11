@@ -64,6 +64,12 @@ class ExecutionService:
         if duplicate:
             return duplicate
 
+        risk_price = estimated_price if estimated_price is not None else limit_price
+        if mode is ExecutionMode.LIVE and risk_price is None:
+            raise ValueError(
+                "Live execution requires an estimated price for pre-trade risk checks"
+            )
+
         normalized_symbol = symbol.strip().upper()
         # Serialize order admission per portfolio for the duration of the
         # transaction. This prevents concurrent requests from both passing
@@ -72,7 +78,6 @@ class ExecutionService:
             text("SELECT pg_advisory_xact_lock(hashtext(:portfolio_id))"),
             {"portfolio_id": str(portfolio.id)},
         )
-        risk_price = estimated_price if estimated_price is not None else limit_price
         try:
             await RiskService(self.db).require_approval(
                 portfolio=portfolio,
