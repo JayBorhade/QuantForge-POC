@@ -6,6 +6,7 @@ boundary; simulation and metrics are provider-neutral under app.backtesting.
 
 from datetime import datetime
 from decimal import Decimal
+import math
 from typing import Any, Dict
 import pandas as pd
 import yfinance as yf
@@ -32,8 +33,8 @@ class BacktestEngine:
     ) -> Dict[str, Any]:
         if start_date >= end_date:
             raise ValueError("start_date must be earlier than end_date")
-        if initial_capital <= 0:
-            raise ValueError("initial_capital must be positive")
+        if not math.isfinite(float(initial_capital)) or initial_capital <= 0:
+            raise ValueError("initial_capital must be finite and positive")
         # Load enough warm-up history for long indicators (notably EMA-50)
         # while only simulating trades inside the requested backtest window.
         warmup_start = start_date - pd.Timedelta(days=120).to_pytimedelta()
