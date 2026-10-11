@@ -65,11 +65,11 @@ class AuthSessionRevocationTests(unittest.TestCase):
         request = SimpleNamespace()
 
         async def run_reset():
-            with patch("app.api.routes.auth.AuthService.revoke_sessions", new_callable=AsyncMock) as revoke, \\
-                 patch("app.api.routes.auth.log_audit", new_callable=AsyncMock):
-                result = await reset_password(data, db, request)
-                revoke.assert_awaited_once_with(db, user.id)
-                return result
+            with patch("app.api.routes.auth.AuthService.revoke_sessions", new_callable=AsyncMock) as revoke:
+                with patch("app.api.routes.auth.log_audit", new_callable=AsyncMock):
+                    result = await reset_password(data, db, request)
+                    revoke.assert_awaited_once_with(db, user.id)
+                    return result
 
         response = asyncio.run(run_reset())
         self.assertEqual(response["message"], "Password reset successfully")
