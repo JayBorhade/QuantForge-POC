@@ -91,6 +91,23 @@ class ExecutionValidationTests(unittest.TestCase):
 
         broker.submit_order.assert_not_awaited()
 
+    def test_non_finite_quantity_and_prices_are_rejected_before_database_access(self):
+        service = ExecutionService(AsyncMock())
+        base = {
+            "portfolio": type("P", (), {"id": "portfolio"})(),
+            "symbol": "NIFTY",
+            "side": OrderSide.BUY,
+            "mode": ExecutionMode.PAPER,
+            "client_order_id": "non-finite",
+        }
+        with self.assertRaisesRegex(ValueError, "quantity must be finite and positive"):
+            asyncio.run(service.submit(quantity=Decimal("NaN"), **base))
+        with self.assertRaisesRegex(ValueError, "estimated_price must be finite and positive"):
+            asyncio.run(service.submit(
+                quantity=Decimal("1"), estimated_price=Decimal("Infinity"), **base
+            ))
+        service.db.execute.assert_not_awaited()
+
 if __name__ == "__main__":
 
     unittest.main()
