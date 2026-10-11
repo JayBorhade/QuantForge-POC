@@ -133,4 +133,8 @@ def run_backtest_for_strategy(
             run.worker_token = None
             run.worker_started_at = None
             run.identity_key = None
+            # Persist the terminal failure before propagating the error. The
+            # session context manager rolls back on exceptions, so without this
+            # explicit commit callers would see a stale RUNNING row forever.
+            db.commit()
             raise
