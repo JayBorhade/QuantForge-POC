@@ -17,7 +17,7 @@ import {
   Terminal,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth";
 
@@ -37,16 +37,39 @@ const links = [
 export function DashboardSidebar() {
   const pathname = usePathname();
   const { logout, user } = useAuthStore();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);\n  const menuButtonRef = useRef<HTMLButtonElement>(null);\n  const sidebarRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
 
   useEffect(() => {
-    if (!mobileOpen) return;
+    if (!mobileOpen) {
+      menuButtonRef.current?.focus();
+      return;
+    }
+    sidebarRef.current?.querySelector<HTMLElement>("[data-drawer-close]")?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMobileOpen(false);
+      if (event.key === "Escape") {
+        setMobileOpen(false);
+        menuButtonRef.current?.focus();
+        return;
+      }
+      if (event.key === "Tab" && sidebarRef.current) {
+        const focusable = Array.from(sidebarRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        ));
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -61,7 +84,7 @@ export function DashboardSidebar() {
     <>
       <button
         type="button"
-        className="ux-icon-button fixed left-4 top-4 z-[70] md:hidden"
+        ref={menuButtonRef}\n        tabIndex={mobileOpen ? -1 : 0}\n        aria-hidden={mobileOpen || undefined}\n        className="ux-icon-button fixed left-4 top-4 z-[70] md:hidden"
         onClick={() => setMobileOpen((value) => !value)}
         aria-label={mobileOpen ? "Close dashboard navigation" : "Open dashboard navigation"}
         aria-expanded={mobileOpen}
