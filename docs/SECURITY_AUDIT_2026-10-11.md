@@ -89,3 +89,6 @@ These changes require the latest PR CI run to pass. They do not close the RLS, c
 
 
 - Product-honesty follow-up: the legacy strategy engine's no-op success response was replaced with an explicit unavailable error; the local launcher no longer labels a local development app as “LIVE”. Regression tests added.
+
+
+- Billing plan descriptions no longer advertise live trading, AI insights, unlimited strategies, or priority support without verified implementation/enforcement. Live broker execution remains disabled; paper trading/backtesting is the product boundary.
