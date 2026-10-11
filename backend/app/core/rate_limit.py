@@ -44,11 +44,15 @@ async def enforce_account_rate_limit(
         socket_timeout=1,
     )
     try:
-        async with client.pipeline(transaction=True) as pipe:
-            pipe.incr(key)
-            pipe.expire(key, window_seconds, nx=True)
-            results = await pipe.execute()
-        count = int(results[0])
+        # A Lua script makes increment + first-hit expiry atomic across replicas.
+        count = int(await client.eval(
+            "local n = redis.call('INCR', KEYS[1]); "
+            "if n == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]); end; "
+            "return n",
+            1,
+            key,
+            window_seconds,
+        ))
         if count > limit:
             ttl = await client.ttl(key)
             raise HTTPException(
