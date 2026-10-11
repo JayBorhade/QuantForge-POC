@@ -115,6 +115,21 @@ class FillAccountingTests(unittest.TestCase):
         asyncio.run(FillService(db).apply_fill(order_id=order.id, quantity=Decimal("1"), price=Decimal("50")))
         self.assertEqual(portfolio.cash_balance, Decimal("100"))
 
+    def test_non_finite_fill_values_are_rejected_before_database_access(self):
+        for quantity, price, fee, message in (
+            (Decimal("NaN"), Decimal("100"), Decimal("0"), "quantity"),
+            (Decimal("1"), Decimal("Infinity"), Decimal("0"), "price"),
+            (Decimal("1"), Decimal("100"), Decimal("NaN"), "fee"),
+            (Decimal("1"), Decimal("100"), Decimal("Infinity"), "fee"),
+        ):
+            with self.subTest(quantity=quantity, price=price, fee=fee):
+                db = AsyncMock()
+                with self.assertRaisesRegex(FillAccountingError, message):
+                    asyncio.run(FillService(db).apply_fill(
+                        order_id=uuid.uuid4(), quantity=quantity, price=price, fee=fee
+                    ))
+                db.execute.assert_not_awaited()
+
 
 if __name__ == "__main__":
     unittest.main()
