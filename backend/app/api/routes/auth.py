@@ -68,20 +68,24 @@ def clear_auth_cookies(response: Response) -> None:
     response.delete_cookie("csrf_token", path="/", httponly=False, **cookie_options)
 
 
-@router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/signup", status_code=status.HTTP_202_ACCEPTED)
 @limiter.limit("5/minute")
 async def signup(data: SignupRequest, request: Request, db: DbSession, background_tasks: BackgroundTasks):
     # Keep the raw verification token only in the outbound email; the DB stores
-    # only its SHA-256 digest. AuthService.register stores a digest below.
-    user = await AuthService.register(db, data, request)
-    if user.email_verification_token:
-        # Registration's raw token is intentionally not recoverable from storage;
-        # create a fresh one-time token for delivery and persist only its digest.
-        raw_token = generate_token()
-        user.email_verification_token = hash_one_time_token(raw_token)
-        user.email_verification_expires = datetime.now(timezone.utc) + timedelta(hours=24)
-        background_tasks.add_task(send_verification_email, user.email, raw_token)
-    return user
+    # only its SHA-256 digest. Return the same response for existing/new accounts
+    # to avoid disclosing whether an email address is registered.
+    try:
+        user = await AuthService.register(db, data, request)
+    except HTTPException as exc:
+        if exc.status_code != status.HTTP_400_BAD_REQUEST or exc.detail != "Email already registered":
+            raise
+        return {"message": "If the account can be created, verification instructions will be sent."}
+
+    raw_token = generate_token()
+    user.email_verification_token = hash_one_time_token(raw_token)
+    user.email_verification_expires = datetime.now(timezone.utc) + timedelta(hours=24)
+    background_tasks.add_task(send_verification_email, user.email, raw_token)
+    return {"message": "If the account can be created, verification instructions will be sent."}
 
 
 @router.post("/login", response_model=TokenResponse)
