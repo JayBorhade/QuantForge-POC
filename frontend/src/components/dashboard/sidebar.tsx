@@ -111,6 +111,8 @@ export function DashboardSidebar() {
       <aside
         ref={sidebarRef}
         id="dashboard-navigation"
+        role={mobileOpen ? "dialog" : undefined}
+        aria-label="Dashboard navigation"
         aria-modal={mobileOpen ? true : undefined}
         className={cn(
           "fixed left-0 top-0 z-50 flex h-dvh w-64 flex-col border-r border-white/5 bg-card/95 backdrop-blur-xl transition-transform duration-200 md:translate-x-0",
