@@ -17,7 +17,7 @@ Highest-priority remaining gates:
 2. The existing main branch stores TOTP/MFA seeds in plaintext. PR #54 now includes an encryption helper and Alembic data migration; this proposed migration must pass CI and be applied with the correct ENCRYPTION_KEY in staging before the risk can be considered closed.
 3. Route-by-route IDOR/BOLA adversarial tests are not complete.
 4. Stripe signature/replay/idempotency, Redis-backed rate limits, cookie/proxy/TLS, SMTP, and broker flows require staging validation.
-5. The CI runs on the previously reviewed branch head passed backend/frontend CI, the PostgreSQL migration baseline, CodeQL for Python and JavaScript/TypeScript, and dependency audit. Any subsequent commit must pass these checks again. Full npm audit has a documented development-tooling residual.
+5. The latest pre-observability commit passed backend/frontend CI, the PostgreSQL migration baseline, CodeQL for Python and JavaScript/TypeScript, and dependency audit. A follow-up commit now adds live database/Redis/Celery probes to the system-log endpoint, caps log query sizes, and redacts raw strategy exception details; its CI must pass before merge. Full npm audit has a documented development-tooling residual.
 
 ## 20-check assessment
 
