@@ -37,7 +37,7 @@ class BinanceBrokerAdapter:
 
     @staticmethod
     def _status(value: str) -> str:
-        return {
+        status_map = {
             "NEW": "submitted",
             "PENDING_NEW": "pending",
             "PARTIALLY_FILLED": "partially_filled",
@@ -45,7 +45,11 @@ class BinanceBrokerAdapter:
             "CANCELED": "cancelled",
             "REJECTED": "rejected",
             "EXPIRED": "cancelled",
-        }.get(value.upper(), "failed")
+        }
+        normalized = value.upper()
+        if normalized not in status_map:
+            raise ValueError("Unsupported Binance order status")
+        return status_map[normalized]
 
     async def connect(self) -> bool:
         try:
