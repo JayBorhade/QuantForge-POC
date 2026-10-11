@@ -18,7 +18,7 @@ class BrokerSubmissionUnknown(Exception):
 
 
 class BrokerSubmissionRejected(Exception):
-    """The provider definitively rejected the order before accepting it."""
+    """The order was definitively not accepted (provider rejection or preflight failure)."""
 
 
 @dataclass(frozen=True)
