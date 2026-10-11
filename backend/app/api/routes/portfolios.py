@@ -3,6 +3,7 @@
 import logging
 import uuid
 from decimal import Decimal
+import math
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, status
@@ -29,7 +30,15 @@ logger = logging.getLogger("quantforge.portfolios")
 class PortfolioCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=128)
     currency: str = "USD"
-    initial_capital: float = Field(default=100000.0, gt=0)
+    initial_capital: float = Field(default=100000.0, gt=0, allow_inf_nan=False)
+
+    @field_validator("currency")
+    @classmethod
+    def normalize_currency(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if not normalized.isalpha() or not 3 <= len(normalized) <= 8:
+            raise ValueError("currency must be a 3–8 character alphabetic code")
+        return normalized
 
 
 class PortfolioResponse(BaseModel):
