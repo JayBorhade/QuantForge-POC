@@ -7,7 +7,7 @@ from typing import Any, Mapping
 
 import httpx
 
-from app.brokers.base import BrokerOrderRequest, BrokerOrderResult
+from app.brokers.base import BrokerOrderRequest, BrokerOrderResult, BrokerSubmissionUnknown, BrokerSubmissionRejected
 from app.models.order import OrderSide, OrderType
 
 
@@ -83,9 +83,15 @@ class ZerodhaBrokerAdapter:
                 headers=self._headers(),
                 data=payload,
             )
+            if response.status_code >= 500:
+                raise BrokerSubmissionUnknown(
+                    f"Zerodha returned HTTP {response.status_code}; order outcome is unknown"
+                )
             data = response.json()
             if response.status_code >= 400 or data.get("status") != "success":
-                raise RuntimeError(data.get("message") or f"Zerodha order failed ({response.status_code})")
+                raise BrokerSubmissionRejected(
+                    data.get("message") or f"Zerodha rejected the order ({response.status_code})"
+                )
             return BrokerOrderResult(str(data["data"]["order_id"]), "submitted")
 
     async def cancel_order(self, broker_order_id: str) -> None:
