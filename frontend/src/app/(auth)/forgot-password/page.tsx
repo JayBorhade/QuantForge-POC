@@ -29,7 +29,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
+    <main id="page-content" tabIndex={-1} className="flex min-h-screen items-center justify-center px-4 outline-none">
       <Card className="w-full max-w-md p-8">
         <h1 className="text-2xl font-bold">Reset password</h1>
         {sent ? (
@@ -50,6 +50,6 @@ export default function ForgotPasswordPage() {
         )}
         <Link href="/login" className="mt-6 block text-sm text-primary hover:underline">Back to login</Link>
       </Card>
-    </div>
+    </main>
   );
 }
