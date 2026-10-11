@@ -15,6 +15,7 @@ from app.core.config import get_settings
 from app.core.encryption import decrypt_mfa_secret
 from app.core.sanitize import sanitize_email, sanitize_phone, sanitize_string
 from app.core.security import (
+    hash_one_time_token,
     create_access_token,
     create_refresh_token,
     generate_otp,
@@ -47,7 +48,8 @@ class AuthService:
             full_name=sanitize_string(data.full_name, 255) or data.full_name,
             phone=sanitize_phone(data.phone) if data.phone else None,
             hashed_password=hash_password(data.password),
-            email_verification_token=generate_token(),
+            email_verification_token=hash_one_time_token(generate_token()),
+            email_verification_expires=datetime.now(timezone.utc) + timedelta(hours=24),
         )
         db.add(user)
         await db.flush()
