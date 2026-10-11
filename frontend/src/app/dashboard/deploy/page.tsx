@@ -128,7 +128,7 @@ export default function DeployPage() {
                 <Button size="sm" variant="outline" className="gap-1" disabled={Boolean(pendingAction) || deployment.status === "running"} onClick={() => void start(deployment)}>
                   <Play aria-hidden="true" className="h-3 w-3" /> {pendingAction === `start:${deployment.id}` ? "Starting…" : "Start"}
                 </Button>
-                <Button size="sm" variant="ghost" className="gap-1" disabled={Boolean(pendingAction) || deployment.status !== "running"} onClick={() => void stop(deployment)}>
+                <Button size="sm" variant="ghost" className="gap-1" disabled={Boolean(pendingAction) || deployment.status === "stopped"} onClick={() => void stop(deployment)}>
                   <Square aria-hidden="true" className="h-3 w-3" /> {pendingAction === `stop:${deployment.id}` ? "Stopping…" : "Stop"}
                 </Button>
               </div>
