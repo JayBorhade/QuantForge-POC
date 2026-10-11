@@ -39,7 +39,7 @@ export function DashboardSidebar() {
   const { logout, user } = useAuthStore();
   const [mobileOpen, setMobileOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
-  const sidebarRef = useRef<HTMLElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);\n  const wasMobileOpenRef = useRef(false);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -47,9 +47,11 @@ export function DashboardSidebar() {
 
   useEffect(() => {
     if (!mobileOpen) {
-      menuButtonRef.current?.focus();
+      if (wasMobileOpenRef.current) menuButtonRef.current?.focus();
+      wasMobileOpenRef.current = false;
       return;
     }
+    wasMobileOpenRef.current = true;
     sidebarRef.current?.querySelector<HTMLElement>("[data-drawer-close]")?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -106,15 +108,22 @@ export function DashboardSidebar() {
         />
       )}
       <aside
+        ref={sidebarRef}
         id="dashboard-navigation"
+        aria-modal={mobileOpen ? true : undefined}
         className={cn(
           "fixed left-0 top-0 z-50 flex h-dvh w-64 flex-col border-r border-white/5 bg-card/95 backdrop-blur-xl transition-transform duration-200 md:translate-x-0",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="flex h-16 items-center gap-2 border-b border-white/5 px-6">
-          <Activity aria-hidden="true" className="h-6 w-6 text-primary" />
-          <span className="font-bold">Quant<span className="text-primary">Forge</span></span>
+        <div className="flex h-16 items-center justify-between gap-2 border-b border-white/5 px-6">
+          <div className="flex items-center gap-2">
+            <Activity aria-hidden="true" className="h-6 w-6 text-primary" />
+            <span className="font-bold">Quant<span className="text-primary">Forge</span></span>
+          </div>
+          <button type="button" data-drawer-close className="ux-icon-button md:hidden" aria-label="Close dashboard navigation" onClick={() => setMobileOpen(false)}>
+            <X aria-hidden="true" className="h-4 w-4" />
+          </button>
         </div>
 
         <nav aria-label="Dashboard navigation" className="flex-1 space-y-1 overflow-y-auto p-4">
