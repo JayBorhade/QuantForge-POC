@@ -116,10 +116,11 @@ async def websocket_endpoint(websocket: WebSocket):
         payload = jwt.decode(
             token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
         )
-        if payload.get("type") != "access" or not payload.get("sub"):
+        if payload.get("type") != "access" or not payload.get("sub") or not payload.get("exp"):
             await websocket.close(code=4001, reason="Invalid token")
             return
         user_id = str(uuid.UUID(str(payload["sub"])))
+        expires_at = datetime.fromtimestamp(float(payload["exp"]), timezone.utc)
         session_jti = payload.get("session_jti")
         # WebSocket access must be tied to a revocable server-side session.
         if not isinstance(session_jti, str) or not session_jti:
@@ -158,7 +159,15 @@ async def websocket_endpoint(websocket: WebSocket):
             }
         )
         while True:
-            raw = await websocket.receive_text()
+            remaining = (expires_at - datetime.now(timezone.utc)).total_seconds()
+            if remaining <= 0:
+                await websocket.close(code=4001, reason="Access token expired")
+                break
+            try:
+                raw = await asyncio.wait_for(websocket.receive_text(), timeout=remaining)
+            except asyncio.TimeoutError:
+                await websocket.close(code=4001, reason="Access token expired")
+                break
             try:
                 msg = json.loads(raw) if raw else {}
             except json.JSONDecodeError:
