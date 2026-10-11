@@ -123,3 +123,14 @@ These latest changes require the next CI/migration/security run to pass. RLS and
 - The repository has no frontend lockfile in the branch; npm lockfile generation could not be completed without npm registry access. Do not claim a reproducible `npm ci` build until the lockfile is generated and committed.
 - Staging-only checks remain: existing-user MFA encryption migration with the actual production key, Stripe replay/signature/idempotency, Redis multi-replica/outage behavior, TLS/proxy/cookie settings, SMTP, broker order-tag lookup/cancel/reconciliation, and paper-trading soak.
 - No authorized production target was provided for DAST; no real-money orders were placed.
+
+
+### Last hardening updates (current candidate)
+- Broker submissions now persist the order/idempotency record before network I/O. 5xx, transport, missing-identifier, and other ambiguous post-send outcomes remain `SUBMISSION_UNKNOWN`; uncertain exception details are redacted.
+- Zerodha and Angel One now attach stable client-id-derived order tags and expose lookup by tag for reconciliation. Angel One keeps both order and unique-order identifiers for the API calls that require each.
+- Cancellation now requires a follow-up broker status check before the order is marked CANCELLED.
+- Client order IDs are bounded and idempotency reuse with a different order payload is rejected.
+- Production frontend image runs as non-root and enables HSTS at build time. Email subjects are CR/LF-sanitized and trade-alert HTML values are escaped.
+- Added tests for 5xx ambiguity, stable provider tags, idempotency binding, and broker-confirmed cancellation.
+
+The most recent candidate's CI, CodeQL/dependency analysis, and migration-baseline runs are pending in GitHub Actions. Earlier candidate c8a46a6 had all three workflow groups passing, but that does not substitute for validation of these newer edits.
