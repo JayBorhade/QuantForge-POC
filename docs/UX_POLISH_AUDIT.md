@@ -38,10 +38,10 @@
 
 ## Additional integrity changes
 
-- Removed unsupported landing-page performance metrics and hard-coded marketing prices; subscription plans now come from the billing API and show an unavailable state instead of fabricated fallback pricing.
+- Removed unsupported landing-page performance metrics, the randomized synthetic performance chart, hard-coded market ticker prices and hard-coded marketing prices. Subscription plans now come from the billing API and show an unavailable state instead of fabricated fallback pricing.
 - Added real article destinations for the existing blog links and labelled their dates as publication dates.
 - Fixed CSRF-cookie parsing in the Axios client and made network-error refresh handling safer.
-- Added safer generic error messages for selected forms; credentials and server diagnostic details are not intentionally surfaced by these UI messages.
+- Added truthful loading/error/success feedback for selected dashboard, portfolio, live-trading, strategy, broker, deployment and auth flows. Added safer generic error messages for selected forms; credentials and server diagnostic details are not intentionally surfaced by these UI messages.
 - No database schema, trading algorithms, broker API contracts or live-execution rules were intentionally changed.
 
 ## Verification still required
