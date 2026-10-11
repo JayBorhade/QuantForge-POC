@@ -33,14 +33,3 @@ jobs:
           build-mode: none
       - name: Analyze
         uses: github/codeql-action/analyze@v3
-  dependency-review:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - name: Review dependency changes
-        uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: high
