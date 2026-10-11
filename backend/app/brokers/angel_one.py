@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 
-from app.brokers.base import BrokerOrderRequest, BrokerOrderResult
+from app.brokers.base import BrokerOrderRequest, BrokerOrderResult, BrokerSubmissionUnknown, BrokerSubmissionRejected
 from app.models.order import OrderType
 
 
@@ -87,12 +87,18 @@ class AngelOneBrokerAdapter:
                 headers=self._headers(),
                 json=payload,
             )
+            if response.status_code >= 500:
+                raise BrokerSubmissionUnknown(
+                    f"Angel One returned HTTP {response.status_code}; order outcome is unknown"
+                )
             data = response.json()
             if response.status_code >= 400 or data.get("status") is not True:
-                raise RuntimeError(data.get("message") or "Angel One order failed")
+                raise BrokerSubmissionRejected(
+                    data.get("message") or f"Angel One rejected the order ({response.status_code})"
+                )
             order_id = (data.get("data") or {}).get("orderid") or (data.get("data") or {}).get("uniqueorderid")
             if not order_id:
-                raise RuntimeError("Angel One did not return an order id")
+                raise BrokerSubmissionUnknown("Angel One may have accepted the order without returning an order id")
             return BrokerOrderResult(str(order_id), "submitted")
 
     async def cancel_order(self, broker_order_id: str) -> None:
