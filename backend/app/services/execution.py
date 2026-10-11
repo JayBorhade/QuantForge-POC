@@ -37,8 +37,11 @@ class ExecutionService:
         estimated_price: Decimal | None = None,
         broker_params: Mapping[str, str] | None = None,
     ) -> Order:
-        if quantity <= 0:
-            raise ValueError("Order quantity must be positive")
+        if not quantity.is_finite() or quantity <= 0:
+            raise ValueError("Order quantity must be finite and positive")
+        for label, price in (("limit_price", limit_price), ("estimated_price", estimated_price)):
+            if price is not None and (not price.is_finite() or price <= 0):
+                raise ValueError(f"{label} must be finite and positive")
         if not symbol.strip():
             raise ValueError("Order symbol is required")
         if mode is ExecutionMode.LIVE:
