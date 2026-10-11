@@ -44,6 +44,7 @@ class User(Base):
     two_factor_secret: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     avatar_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     email_verification_token: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    email_verification_expires: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     password_reset_token: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     password_reset_expires: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
