@@ -9,6 +9,7 @@ from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.session import UserSession
 from app.models.strategy import Strategy, StrategyRun
 from app.models.subscription import Subscription
+from app.models.stripe_webhook_event import StripeWebhookEvent
 from app.models.trade import Trade
 from app.models.user import User
 
@@ -24,6 +25,7 @@ __all__ = [
     "Notification",
     "Deployment",
     "Subscription",
+    "StripeWebhookEvent",
     "AuditLog",
     "Order",
     "Position",
