@@ -51,24 +51,29 @@ async def get_current_user(
     except (TypeError, ValueError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
-    # Session-bound access tokens can be revoked immediately by logout or a
-    # password reset. Tokens issued before this rollout lack session_jti and
-    # remain valid only until their existing short expiration.
+    # Every access token must be bound to a server-side revocable session.
+    # Accepting legacy unbound tokens would bypass logout, ban, and reset
+    # revocation until the token's expiry.
     session_jti = payload.get("session_jti")
-    if session_jti:
-        session_result = await db.execute(
-            select(UserSession).where(
-                UserSession.user_id == parsed_user_id,
-                UserSession.refresh_token_jti == session_jti,
-                UserSession.is_active == True,
-                UserSession.expires_at > datetime.now(timezone.utc),
-            )
+    if not isinstance(session_jti, str) or not session_jti:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session-bound token required",
         )
-        if session_result.scalar_one_or_none() is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Session revoked or expired",
-            )
+
+    session_result = await db.execute(
+        select(UserSession).where(
+            UserSession.user_id == parsed_user_id,
+            UserSession.refresh_token_jti == session_jti,
+            UserSession.is_active == True,
+            UserSession.expires_at > datetime.now(timezone.utc),
+        )
+    )
+    if session_result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session revoked or expired",
+        )
 
     result = await db.execute(select(User).where(User.id == parsed_user_id))
     user = result.scalar_one_or_none()
