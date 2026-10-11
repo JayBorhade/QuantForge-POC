@@ -8,6 +8,7 @@ from sqlalchemy import select
 from app.api.deps import CurrentUser, DbSession
 from app.core.config import get_settings
 from app.core.csrf import set_csrf_cookie
+from app.core.encryption import decrypt_mfa_secret, encrypt_mfa_secret
 from app.core.security import decode_token, generate_token, hash_password
 from app.core.rate_limit import limiter
 from app.models.user import User
@@ -207,7 +208,7 @@ async def verify_email(data: VerifyEmailRequest, request: Request, db: DbSession
 @limiter.limit("3/minute")
 async def setup_2fa(request: Request, current_user: CurrentUser, db: DbSession):
     secret, uri = AuthService.setup_2fa(current_user)
-    current_user.two_factor_secret = secret
+    current_user.two_factor_secret = encrypt_mfa_secret(secret)
     return TwoFactorSetupResponse(secret=secret, qr_uri=uri)
 
 
@@ -219,7 +220,7 @@ async def enable_2fa(data: TwoFactorVerifyRequest, request: Request, current_use
     if not current_user.two_factor_secret:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Setup 2FA first")
 
-    totp = pyotp.TOTP(current_user.two_factor_secret)
+    totp = pyotp.TOTP(decrypt_mfa_secret(current_user.two_factor_secret))
     if not totp.verify(data.otp_code, valid_window=1):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OTP")
 
