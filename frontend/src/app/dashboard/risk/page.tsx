@@ -200,7 +200,7 @@ export default function RiskPage() {
           <Button className="mt-5" onClick={save} disabled={saving || !portfolioId}>
             <Save className="mr-2 h-4 w-4" /> {saving ? "Saving..." : "Save controls"}
           </Button>
-          {message && <p className="mt-3 text-sm text-muted-foreground">{message}</p>}
+          {message && <p className={`mt-3 text-sm ${message.startsWith("Unable") || message.startsWith("Could not") ? "text-red-500" : "text-muted-foreground"}`} role={message.startsWith("Unable") || message.startsWith("Could not") ? "alert" : "status"} aria-live="polite">{message}</p>}
         </Card>
       </div>
     </div>
