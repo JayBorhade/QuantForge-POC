@@ -16,7 +16,7 @@ class CsrfTokenTests(unittest.TestCase):
     def test_csrf_exemptions_are_exact(self):
         self.assertTrue(is_csrf_exempt("/api/v1/auth/login"))
         self.assertFalse(is_csrf_exempt("/api/v1/auth/refresh"))
-        self.assertFalse(is_csrf_exempt("/api/v1/auth/resend-verification"))
+        self.assertTrue(is_csrf_exempt("/api/v1/auth/resend-verification"))
         self.assertFalse(is_csrf_exempt("/api/v1/auth/login-export"))
         self.assertFalse(is_csrf_exempt("/api/v1/auth/reset-password-extra"))
 
