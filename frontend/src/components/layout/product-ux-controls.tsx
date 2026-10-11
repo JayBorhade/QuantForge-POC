@@ -15,11 +15,14 @@ const searchablePages = [
   { title: "Log in", href: "/login", description: "Sign in to your QuantForge account" },
   { title: "Create account", href: "/signup", description: "Register a QuantForge account" },
   { title: "Dashboard", href: "/dashboard", description: "Portfolio overview and trading workspace" },
+  { title: "Live trading", href: "/dashboard/live", description: "Live trading panel and execution feed" },
   { title: "Strategies", href: "/dashboard/strategies", description: "Create and manage trading strategies" },
   { title: "Backtesting", href: "/dashboard/backtest", description: "Run backtests and review strategy results" },
   { title: "Portfolio", href: "/dashboard/portfolio", description: "Portfolio valuation and performance analytics" },
   { title: "Risk", href: "/dashboard/risk", description: "Risk limits, exposure and risk events" },
   { title: "Broker connections", href: "/dashboard/brokers", description: "Manage connected broker integrations" },
+  { title: "Deployments", href: "/dashboard/deploy", description: "Manage bot deployments" },
+  { title: "System logs", href: "/dashboard/logs", description: "Review strategy, audit and system logs" },
   { title: "Settings", href: "/dashboard/settings", description: "Account and application settings" },
 ];
 
