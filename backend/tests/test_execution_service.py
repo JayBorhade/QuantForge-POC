@@ -51,20 +51,19 @@ class ExecutionValidationTests(unittest.TestCase):
         portfolio = type("P", (), {"id": "portfolio", "user_id": "user"})()
 
         with patch("app.services.execution.RiskService.require_approval", new=AsyncMock()):
-            with self.assertRaises(BrokerSubmissionUnknown):
-                asyncio.run(service.submit(
-                    portfolio=portfolio,
-                    symbol="NIFTY",
-                    side=OrderSide.BUY,
-                    quantity=Decimal("1"),
-                    mode=ExecutionMode.LIVE,
-                    client_order_id="test-unknown",
-                    estimated_price=Decimal("100"),
-                ))
+            created_order = asyncio.run(service.submit(
+                portfolio=portfolio,
+                symbol="NIFTY",
+                side=OrderSide.BUY,
+                quantity=Decimal("1"),
+                mode=ExecutionMode.LIVE,
+                client_order_id="test-unknown",
+                estimated_price=Decimal("100"),
+            ))
 
-        created_order = next(call.args[0] for call in db.add.call_args_list if call.args)
         self.assertEqual(created_order.status, OrderStatus.SUBMISSION_UNKNOWN)
         self.assertNotEqual(created_order.status, OrderStatus.FAILED)
+        db.flush.assert_awaited()
         broker.submit_order.assert_awaited_once()
 
     def test_live_requires_verified_two_factor_owner(self):
