@@ -104,14 +104,14 @@ class FillService:
             old_qty = position.quantity
             new_qty = old_qty + quantity
             position.average_cost = (
-                ((old_qty * position.average_cost) + (quantity * price)) / new_qty
+                ((old_qty * position.average_cost) + (quantity * price) + fee) / new_qty
                 if new_qty else Decimal("0")
             )
             position.quantity = new_qty
         else:
             if position.quantity < quantity:
                 raise FillAccountingError("Cannot sell more than the current position")
-            position.realized_pnl += (price - position.average_cost) * quantity
+            position.realized_pnl += (price - position.average_cost) * quantity - fee
             position.quantity -= quantity
             if position.quantity == 0:
                 position.average_cost = Decimal("0")
