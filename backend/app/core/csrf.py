@@ -17,6 +17,7 @@ CSRF_EXEMPT_SUFFIXES = frozenset({
     "/auth/signup",
     "/auth/forgot-password",
     "/auth/reset-password",
+    "/auth/resend-verification",
     "/auth/verify-email",
     "/billing/webhook",
 })
