@@ -189,6 +189,24 @@ class RiskTests(unittest.TestCase):
         ))
         self.assertTrue(decision.approved)
 
+    def test_non_finite_order_inputs_are_rejected_before_queries(self):
+        p = portfolio()
+        db = AsyncMock()
+        service = RiskService(db)
+        bad_quantity = asyncio.run(service.evaluate(
+            portfolio=p, symbol="NIFTY", side=OrderSide.BUY,
+            quantity=Decimal("NaN"),
+        ))
+        bad_price = asyncio.run(service.evaluate(
+            portfolio=p, symbol="NIFTY", side=OrderSide.BUY,
+            quantity=Decimal("1"), estimated_price=Decimal("Infinity"),
+        ))
+        self.assertFalse(bad_quantity.approved)
+        self.assertIn("finite and positive", bad_quantity.reason)
+        self.assertFalse(bad_price.approved)
+        self.assertIn("finite and positive", bad_price.reason)
+        db.execute.assert_not_awaited()
+
 if __name__ == "__main__":
 
     unittest.main()
