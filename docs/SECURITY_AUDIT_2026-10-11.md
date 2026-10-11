@@ -106,3 +106,20 @@ These changes require the latest PR CI run to pass. They do not close the RLS, c
 - Compose database health-check variables are escaped so they are expanded inside the container shell, not by the host Compose parser.
 
 These latest changes require the next CI/migration/security run to pass. RLS and environment-backed release gates remain unresolved.
+
+
+### Final follow-up batch: broker execution and resource limits
+- Live order idempotency keys are validated, bound to the full order payload, and rechecked after the per-portfolio lock.
+- A live order record is committed before any broker submission request. Transport failures, provider 5xx responses, and ambiguous responses preserve `SUBMISSION_UNKNOWN`; uncertain errors are redacted from audit payloads.
+- Broker adapters distinguish definitive rejection from unknown outcomes. Zerodha and Angel One use deterministic client-id-derived tags and order-book lookup for reconciliation; Angel One persists both provider identifiers so status lookup and cancellation use the correct ID.
+- Order cancellation is not marked complete until a follow-up broker status lookup confirms cancellation.
+- Strategy parameters now use per-strategy allowlists and validation; per-plan strategy/portfolio caps are enforced server-side with account-row locking.
+- Daily portfolio P&L accumulator resets at UTC midnight. Backtest errors commit terminal state, indicator warm-up and provider date normalization are applied, RSI exits are not suppressed by cooldown, and zero-valued metrics are preserved.
+- API docs/OpenAPI are disabled outside local/test environments; portfolio capital/currency validation and Compose health-check variable escaping were tightened.
+
+### Still-open release gates
+- PostgreSQL RLS remains a documented design item rather than an implemented control. It must not be treated as complete.
+- Full adversarial two-account API tests and a full endpoint-by-endpoint authorization audit remain outstanding.
+- The repository has no frontend lockfile in the branch; npm lockfile generation could not be completed without npm registry access. Do not claim a reproducible `npm ci` build until the lockfile is generated and committed.
+- Staging-only checks remain: existing-user MFA encryption migration with the actual production key, Stripe replay/signature/idempotency, Redis multi-replica/outage behavior, TLS/proxy/cookie settings, SMTP, broker order-tag lookup/cancel/reconciliation, and paper-trading soak.
+- No authorized production target was provided for DAST; no real-money orders were placed.
