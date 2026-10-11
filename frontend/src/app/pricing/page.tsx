@@ -60,7 +60,9 @@ export default function PricingPage() {
         throw new Error("Checkout URL unavailable");
       }
       const checkoutUrl = new URL(data.checkout_url);
-      if (checkoutUrl.protocol !== "https:" || !["checkout.stripe.com", "billing.stripe.com"].includes(checkoutUrl.hostname)) {
+      const configuredHost = process.env.NEXT_PUBLIC_STRIPE_CHECKOUT_HOST?.trim().toLowerCase();
+      const allowedHosts = new Set(["checkout.stripe.com", "billing.stripe.com", ...(configuredHost ? [configuredHost] : [])]);
+      if (checkoutUrl.protocol !== "https:" || checkoutUrl.username || checkoutUrl.password || !allowedHosts.has(checkoutUrl.hostname.toLowerCase())) {
         throw new Error("Unexpected checkout destination");
       }
       window.location.assign(checkoutUrl.toString());
