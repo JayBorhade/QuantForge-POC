@@ -29,7 +29,7 @@ async def send_email(to: str, subject: str, html_body: str, text_body: Optional[
     message["From"] = settings.smtp_from
     message["To"] = to
     # Prevent CR/LF header injection and keep untrusted subjects bounded.
-    message["Subject"] = subject.replace("\\r", " ").replace("\\n", " ")[:200]
+    message["Subject"] = subject.replace("\r", " ").replace("\n", " ")[:200]
     message.attach(MIMEText(text_body, "plain"))
     message.attach(MIMEText(html_body, "html"))
 
