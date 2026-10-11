@@ -96,7 +96,7 @@ class AuthService:
         otp_code: Optional[str] = None,
     ) -> Tuple[User, str, str]:
         email = sanitize_email(email)
-        result = await db.execute(select(User).where(User.email == email))
+        result = await db.execute(select(User).where(User.email == email).with_for_update())
         user = result.scalar_one_or_none()
 
         if not user or not verify_password(password, user.hashed_password):
@@ -114,8 +114,7 @@ class AuthService:
         if user.two_factor_enabled:
             if not otp_code:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="2FA code required")
-            totp = pyotp.TOTP(decrypt_mfa_secret(user.two_factor_secret))
-            if not totp.verify(otp_code, valid_window=1):
+            if not AuthService.verify_totp_once(user, otp_code):
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid 2FA code")
 
         jti = generate_token()[:32]
@@ -243,6 +242,25 @@ class AuthService:
 
         await log_audit(db, action="user.logout", user_id=user_id)
 
+    @staticmethod
+    def verify_totp_once(user: User, otp_code: str) -> bool:
+        """Accept a TOTP time step only once per account."""
+        if not user.two_factor_secret or not otp_code or not otp_code.isdigit():
+            return False
+        try:
+            totp = pyotp.TOTP(decrypt_mfa_secret(user.two_factor_secret))
+            now = datetime.now(timezone.utc)
+            current_step = totp.timecode(now)
+            for step in (current_step - 1, current_step, current_step + 1):
+                candidate_time = now + timedelta(seconds=(step - current_step) * totp.interval)
+                if totp.verify(otp_code, for_time=candidate_time, valid_window=0):
+                    if user.last_totp_step is not None and step <= user.last_totp_step:
+                        return False
+                    user.last_totp_step = step
+                    return True
+        except (TypeError, ValueError):
+            return False
+        return False
     @staticmethod
     def setup_2fa(user: User) -> Tuple[str, str]:
         secret = pyotp.random_base32()
