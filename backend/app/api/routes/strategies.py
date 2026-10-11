@@ -208,7 +208,16 @@ async def create_strategy(
     current_user: CurrentUser,
     db: DbSession,
 ):
+    from app.services.plan_limits import count_user_resource, get_effective_limits
     from strategies.registry import validate_strategy_parameters
+
+    limits = await get_effective_limits(db, current_user.id)
+    strategy_count = await count_user_resource(db, current_user.id, "strategies")
+    if strategy_count >= limits.strategies:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Strategy limit reached for the current plan",
+        )
 
     try:
         validated_parameters = validate_strategy_parameters(
