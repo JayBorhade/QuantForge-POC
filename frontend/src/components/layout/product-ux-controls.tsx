@@ -22,7 +22,7 @@ const searchablePages = [
   { title: "Risk", href: "/dashboard/risk", description: "Risk limits, exposure and risk events" },
   { title: "Broker connections", href: "/dashboard/brokers", description: "Manage connected broker integrations" },
   { title: "Deployments", href: "/dashboard/deploy", description: "Manage bot deployments" },
-  { title: "System logs", href: "/dashboard/logs", description: "Review strategy, audit and system logs" },
+  { title: "Activity and logs", href: "/dashboard/logs", description: "Review strategy run history and account audit events" },
   { title: "Settings", href: "/dashboard/settings", description: "Account and application settings" },
 ];
 
