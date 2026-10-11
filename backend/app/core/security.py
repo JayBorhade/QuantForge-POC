@@ -85,5 +85,10 @@ def generate_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+def hash_one_time_token(token: str) -> str:
+    """Hash password-reset and email-verification tokens before database storage."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
 def generate_otp() -> str:
     return f"{secrets.randbelow(900000) + 100000:06d}"
