@@ -10,6 +10,7 @@ from starlette.requests import Request
 
 from app.api.routes.auth import resend_verification
 from app.core.rate_limit import limiter
+from app.core.security import hash_one_time_token
 
 
 def make_request() -> Request:
@@ -45,7 +46,8 @@ class ResendVerificationTests(unittest.TestCase):
         self.assertIn("verification email has been sent", response["message"])
         self.assertNotEqual(user.email_verification_token, "old-token")
         self.assertEqual(len(tasks.tasks), 1)
-        self.assertEqual(tasks.tasks[0].args, (user.email, user.email_verification_token))
+        self.assertEqual(tasks.tasks[0].args[0], user.email)
+        self.assertEqual(hash_one_time_token(tasks.tasks[0].args[1]), user.email_verification_token)
 
     def test_verified_user_gets_generic_response_without_email(self):
         user = SimpleNamespace(
