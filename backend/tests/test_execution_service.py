@@ -108,6 +108,31 @@ class ExecutionValidationTests(unittest.TestCase):
             ))
         service.db.execute.assert_not_awaited()
 
+    def test_live_requires_estimated_price_for_pre_trade_risk(self):
+        db = AsyncMock()
+        owner_result = MagicMock()
+        owner_result.scalar_one_or_none.return_value = type(
+            "U", (), {"is_verified": True, "two_factor_enabled": True}
+        )()
+        duplicate_result = MagicMock()
+        duplicate_result.scalar_one_or_none.return_value = None
+        db.execute.side_effect = [owner_result, duplicate_result]
+        broker = AsyncMock()
+        service = ExecutionService(db, broker)
+        portfolio = type("P", (), {"id": "portfolio", "user_id": "user"})()
+
+        with self.assertRaisesRegex(ValueError, "estimated price for pre-trade risk"):
+            asyncio.run(service.submit(
+                portfolio=portfolio,
+                symbol="NIFTY",
+                side=OrderSide.BUY,
+                quantity=Decimal("1"),
+                mode=ExecutionMode.LIVE,
+                client_order_id="live-no-price",
+            ))
+
+        broker.submit_order.assert_not_awaited()
+
 if __name__ == "__main__":
 
     unittest.main()
