@@ -5,12 +5,20 @@ import unittest
 import uuid
 from unittest.mock import AsyncMock
 
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from starlette.requests import Request
 from types import SimpleNamespace
 
 from app.core.security import create_access_token
 from app.api.deps import get_current_user
 from app.services.auth import AuthService
+from app.core.rate_limit import limiter
+
+
+def make_request(path: str) -> Request:
+    app = FastAPI()
+    app.state.limiter = limiter
+    return Request({"type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": "POST", "scheme": "http", "path": path, "raw_path": path.encode(), "query_string": b"", "headers": [], "client": ("127.0.0.1", 12345), "server": ("testserver", 80), "app": app})
 
 
 class Result:
@@ -67,7 +75,7 @@ class AuthSessionRevocationTests(unittest.TestCase):
             "UserResult", (), {"scalar_one_or_none": lambda self: user}
         )())
         data = SimpleNamespace(token="valid-token", password="NewSecurePassword123!")
-        request = SimpleNamespace()
+        request = make_request("/api/v1/auth/reset-password")
 
         async def run_reset():
             with patch("app.api.routes.auth.AuthService.revoke_sessions", new_callable=AsyncMock) as revoke:

@@ -5,9 +5,18 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-from fastapi import BackgroundTasks
+from fastapi import BackgroundTasks, FastAPI
+from starlette.requests import Request
 
 from app.api.routes.auth import resend_verification
+from app.core.rate_limit import limiter
+
+
+def make_request() -> Request:
+    app = FastAPI()
+    app.state.limiter = limiter
+    path = "/api/v1/auth/resend-verification"
+    return Request({"type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": "POST", "scheme": "http", "path": path, "raw_path": path.encode(), "query_string": b"", "headers": [], "client": ("127.0.0.1", 12345), "server": ("testserver", 80), "app": app})
 
 
 class Result:
@@ -30,7 +39,7 @@ class ResendVerificationTests(unittest.TestCase):
         tasks = BackgroundTasks()
 
         response = asyncio.run(
-            resend_verification(SimpleNamespace(email="USER@example.com"), db, tasks)
+            resend_verification(SimpleNamespace(email="USER@example.com"), make_request(), db, tasks)
         )
 
         self.assertIn("verification email has been sent", response["message"])
@@ -49,7 +58,7 @@ class ResendVerificationTests(unittest.TestCase):
         tasks = BackgroundTasks()
 
         response = asyncio.run(
-            resend_verification(SimpleNamespace(email="user@example.com"), db, tasks)
+            resend_verification(SimpleNamespace(email="user@example.com"), make_request(), db, tasks)
         )
 
         self.assertIn("verification email has been sent", response["message"])
@@ -61,7 +70,7 @@ class ResendVerificationTests(unittest.TestCase):
         tasks = BackgroundTasks()
 
         response = asyncio.run(
-            resend_verification(SimpleNamespace(email="missing@example.com"), db, tasks)
+            resend_verification(SimpleNamespace(email="missing@example.com"), make_request(), db, tasks)
         )
 
         self.assertIn("verification email has been sent", response["message"])
