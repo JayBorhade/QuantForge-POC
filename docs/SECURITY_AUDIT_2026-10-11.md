@@ -86,3 +86,6 @@ These changes require the latest PR CI run to pass. They do not close the RLS, c
 - Notification tasks use the real email service and return actual delivery state; they no longer report `sent: true` when no email was sent.
 - Backend container runs as non-root; migrations are a distinct Compose job; Redis requires authentication; local launch replaces placeholder secrets; Docker build context excludes environment files and key material.
 - These changes are pending latest CI. Redis outage/distributed behavior and SMTP/provider delivery still require staging validation.
+
+
+- Product-honesty follow-up: the legacy strategy engine's no-op success response was replaced with an explicit unavailable error; the local launcher no longer labels a local development app as “LIVE”. Regression tests added.
