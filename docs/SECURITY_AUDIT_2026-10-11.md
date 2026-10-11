@@ -60,3 +60,13 @@ Highest-priority remaining gates:
 ## Safety boundary
 
 No live trading, real-money orders, production payment operations, or destructive production tests were performed. Passing static checks is not proof of exploit resistance; unresolved items remain release gates until the evidence above exists.
+
+
+## Follow-up fixes after the initial audit (2026-10-11)
+
+The latest PR head also applies three targeted correctness/security fixes:
+- Access tokens without a non-empty `session_jti` are rejected, so legacy unbound tokens cannot bypass server-side logout/session revocation. This intentionally requires a coordinated rollout: all active clients must obtain a fresh session-bound token after deployment.
+- Risk-limit updates now apply only explicitly supplied fields. Omitting `kill_switch` no longer implicitly sets it to false; explicit `null` can still clear a nullable limit.
+- Backtest runs and audit events are committed before the Celery task is published, removing the race where a worker could start before the run row was committed. If dispatch fails, the existing in-process fallback is scheduled.
+
+These changes require the latest PR CI run to pass. They do not close the RLS, comprehensive adversarial IDOR/BOLA, or staging-validation release gates listed above.
