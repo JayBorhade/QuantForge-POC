@@ -8,9 +8,11 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import CurrentUser, DbSession
 from app.models.subscription import PlanTier, Subscription, SubscriptionStatus
+from app.models.stripe_webhook_event import StripeWebhookEvent
 from app.services.audit import log_audit
 from app.services.stripe_service import (
     PLAN_CONFIG,
@@ -148,7 +150,34 @@ async def stripe_webhook(request: Request, db: DbSession):
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
+    event_id = event.get("id")
     event_type = event["type"]
+    if not event_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Verified Stripe event is missing its id",
+        )
+
+    # Persist the idempotency key before applying business changes. Because the
+    # event row and subscription changes share the request transaction, a failed
+    # handler rolls both back and Stripe can safely retry the event.
+    existing = await db.execute(
+        select(StripeWebhookEvent.event_id).where(
+            StripeWebhookEvent.event_id == event_id
+        )
+    )
+    if existing.scalar_one_or_none() is not None:
+        return {"received": True, "duplicate": True}
+
+    db.add(StripeWebhookEvent(event_id=event_id, event_type=event_type))
+    try:
+        await db.flush()
+    except IntegrityError:
+        # Concurrent delivery may race the pre-check. The unique primary key is
+        # the final authority; rollback the losing transaction and acknowledge.
+        await db.rollback()
+        return {"received": True, "duplicate": True}
+
     obj = event["data"]
 
     if event_type == "checkout.session.completed":
