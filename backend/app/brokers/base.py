@@ -17,6 +17,10 @@ class BrokerSubmissionUnknown(Exception):
     """The broker may have accepted the order, but the client cannot prove the outcome."""
 
 
+class BrokerSubmissionRejected(Exception):
+    """The provider definitively rejected the order before accepting it."""
+
+
 @dataclass(frozen=True)
 class BrokerOrderRequest:
     client_order_id: str
