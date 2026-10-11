@@ -222,6 +222,8 @@ async def stripe_webhook(request: Request, db: DbSession):
         sub_status = status_map.get(obj.get("status"), SubscriptionStatus.EXPIRED)
         price_id = obj.get("items", {}).get("data", [{}])[0].get("price", {}).get("id")
         plan = map_stripe_plan(price_id)
+        if sub_status not in {SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIAL}:
+            plan = "free"
         result = await db.execute(
             select(Subscription).where(Subscription.stripe_customer_id == customer_id)
         )
