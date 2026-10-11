@@ -55,6 +55,29 @@ class RiskTests(unittest.TestCase):
         self.assertFalse(decision.approved)
         self.assertIn("kill switch", decision.reason)
 
+    def test_kill_switch_allows_only_reduce_only_exit(self):
+        p = portfolio()
+        limits = RiskLimit(portfolio_id=p.id, kill_switch=True)
+        position = Position(
+            portfolio_id=p.id, symbol="NIFTY", quantity=Decimal("5"),
+            average_cost=Decimal("100"), realized_pnl=Decimal("0")
+        )
+        db = AsyncMock()
+        db.execute = AsyncMock(side_effect=[Result(limits), Result(position)])
+        allowed = asyncio.run(RiskService(db).evaluate(
+            portfolio=p, symbol="NIFTY", side=OrderSide.SELL, quantity=Decimal("5")
+        ))
+        self.assertTrue(allowed.approved)
+        self.assertIn("Reduce-only", allowed.reason)
+
+        db = AsyncMock()
+        db.execute = AsyncMock(side_effect=[Result(limits), Result(position)])
+        oversized = asyncio.run(RiskService(db).evaluate(
+            portfolio=p, symbol="NIFTY", side=OrderSide.SELL, quantity=Decimal("6")
+        ))
+        self.assertFalse(oversized.approved)
+        self.assertIn("kill switch", oversized.reason)
+
     def test_daily_loss_rejects(self):
         p = portfolio()
         p.daily_pnl = Decimal("-5001")
