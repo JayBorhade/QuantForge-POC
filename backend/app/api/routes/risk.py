@@ -26,7 +26,7 @@ class RiskLimitUpdate(BaseModel):
     max_symbol_exposure: Decimal | None = Field(default=None, gt=0)
     max_strategy_exposure: Decimal | None = Field(default=None, gt=0)
     max_strategy_allocation_pct: Decimal | None = Field(default=None, gt=0, le=1)
-    kill_switch: bool = False
+    kill_switch: bool | None = None
 
     @model_validator(mode="after")
     def validate_order_limit(self):
@@ -162,7 +162,9 @@ async def update_risk_limits(
         limit = RiskLimit(portfolio_id=portfolio.id)
         db.add(limit)
 
-    for field, value in data.model_dump().items():
+    # This endpoint accepts partial updates for backwards compatibility.
+    # Omitted fields must not reset existing limits or disable the kill switch.
+    for field, value in data.model_dump(exclude_unset=True).items():
         setattr(limit, field, value)
 
     await db.flush()
