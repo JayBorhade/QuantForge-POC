@@ -87,7 +87,9 @@ async def request_id_middleware(request: Request, call_next):
 
 @app.middleware("http")
 async def csrf_middleware(request: Request, call_next):
-    validate_csrf(request)
+    csrf_error = validate_csrf(request)
+    if csrf_error is not None:
+        return csrf_error
     response = await call_next(request)
     if (
         request.method == "GET"
