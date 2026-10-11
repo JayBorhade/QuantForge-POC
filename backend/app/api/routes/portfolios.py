@@ -3,11 +3,10 @@
 import logging
 import uuid
 from decimal import Decimal
-import math
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
