@@ -54,6 +54,8 @@ class SettingsSecurityTests(unittest.TestCase):
             cors_origins=["https://quantforge.example"],
             encryption_key="e" * 48,
             csrf_enabled=True,
+            smtp_user="smtp-user",
+            smtp_password="smtp-password",
         )
         self.assertTrue(settings.is_production)
         self.assertTrue(settings.cookie_secure)
