@@ -134,3 +134,6 @@ These latest changes require the next CI/migration/security run to pass. RLS and
 - Added tests for 5xx ambiguity, stable provider tags, idempotency binding, and broker-confirmed cancellation.
 
 The most recent candidate's CI, CodeQL/dependency analysis, and migration-baseline runs are pending in GitHub Actions. Earlier candidate c8a46a6 had all three workflow groups passing, but that does not substitute for validation of these newer edits.
+
+
+- Unknown order statuses from Zerodha, Angel One, and Binance now fail closed instead of being silently mapped to a successful/pending state.
