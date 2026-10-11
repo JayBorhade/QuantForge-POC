@@ -12,12 +12,12 @@ export default function BlogPage() {
   return (
     <div className="min-h-screen">
       <Navbar />
-      <div className="mx-auto max-w-3xl px-4 py-32">
+      <main id="page-content" tabIndex={-1} className="mx-auto max-w-3xl px-4 py-32 outline-none">
         <h1 className="text-4xl font-bold">Blog</h1>
         <div className="mt-12 space-y-6">
           {posts.map((p) => (
             <Card key={p.slug} className="glass-hover p-6">
-              <p className="text-xs text-muted-foreground">{p.date}</p>
+              <p className="text-xs text-muted-foreground">Published {p.date}</p>
               <Link href={`/blog/${p.slug}`}>
                 <h2 className="mt-2 text-xl font-semibold hover:text-primary">{p.title}</h2>
               </Link>
@@ -25,7 +25,7 @@ export default function BlogPage() {
             </Card>
           ))}
         </div>
-      </div>
+      </main>
     </div>
   );
 }
