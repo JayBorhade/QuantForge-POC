@@ -1,6 +1,8 @@
 """Authentication routes."""
 
 from datetime import datetime, timedelta, timezone
+import json
+import secrets
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response, status
 from sqlalchemy import select
@@ -8,7 +10,7 @@ from sqlalchemy import select
 from app.api.deps import CurrentUser, DbSession
 from app.core.config import get_settings
 from app.core.csrf import set_csrf_cookie
-from app.core.encryption import decrypt_mfa_secret, encrypt_mfa_secret
+from app.core.encryption import encrypt_mfa_secret
 from app.core.security import decode_token, generate_token, hash_one_time_token, hash_password
 from app.core.rate_limit import limiter
 from app.models.user import User
@@ -226,6 +228,7 @@ async def setup_2fa(request: Request, current_user: CurrentUser, db: DbSession):
     secret, uri = AuthService.setup_2fa(current_user)
     current_user.two_factor_secret = encrypt_mfa_secret(secret)
     current_user.last_totp_step = None
+    current_user.two_factor_recovery_codes = None
     return TwoFactorSetupResponse(secret=secret, qr_uri=uri)
 
 
@@ -238,8 +241,17 @@ async def enable_2fa(data: TwoFactorVerifyRequest, request: Request, current_use
     if not AuthService.verify_totp_once(current_user, data.otp_code):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OTP")
 
+    # Recovery codes are shown only once. Only their SHA-256 digests are stored.
+    recovery_codes = [secrets.token_urlsafe(9) for _ in range(8)]
+    current_user.two_factor_recovery_codes = json.dumps(
+        [hash_one_time_token(code) for code in recovery_codes]
+    )
     current_user.two_factor_enabled = True
-    return {"message": "2FA enabled successfully"}
+    return {
+        "message": "2FA enabled successfully",
+        "recovery_codes": recovery_codes,
+        "warning": "Save these recovery codes now. They will not be shown again.",
+    }
 
 
 @router.post("/2fa/disable")
@@ -252,4 +264,6 @@ async def disable_2fa(data: TwoFactorVerifyRequest, request: Request, current_us
 
     current_user.two_factor_enabled = False
     current_user.two_factor_secret = None
+    current_user.two_factor_recovery_codes = None
+    current_user.last_totp_step = None
     return {"message": "2FA disabled successfully"}
