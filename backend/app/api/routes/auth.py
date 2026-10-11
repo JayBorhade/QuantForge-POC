@@ -168,6 +168,24 @@ async def reset_password(data: ResetPasswordRequest, db: DbSession, request: Req
     return {"message": "Password reset successfully"}
 
 
+@router.post("/resend-verification")
+async def resend_verification(
+    data: ForgotPasswordRequest,
+    db: DbSession,
+    background_tasks: BackgroundTasks,
+):
+    """Resend verification without revealing whether an email is registered."""
+    result = await db.execute(select(User).where(User.email == data.email.lower()))
+    user = result.scalar_one_or_none()
+    if user and not user.is_verified:
+        token = generate_token()
+        user.email_verification_token = token
+        background_tasks.add_task(send_verification_email, user.email, token)
+    return {
+        "message": "If the account exists and needs verification, a verification email has been sent"
+    }
+
+
 @router.post("/verify-email")
 async def verify_email(data: VerifyEmailRequest, db: DbSession):
     result = await db.execute(select(User).where(User.email_verification_token == data.token))
