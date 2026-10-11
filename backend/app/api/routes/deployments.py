@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, VerifiedUser
 from app.models.deployment import Deployment, DeploymentStatus
 from app.models.strategy import Strategy
 from app.services.audit import log_audit
@@ -55,7 +55,7 @@ async def list_deployments(current_user: CurrentUser, db: DbSession):
 
 
 @router.post("", response_model=DeploymentResponse, status_code=status.HTTP_201_CREATED)
-async def create_deployment(data: DeploymentCreate, current_user: CurrentUser, db: DbSession):
+async def create_deployment(data: DeploymentCreate, current_user: VerifiedUser, db: DbSession):
     strat_result = await db.execute(
         select(Strategy).where(Strategy.id == data.strategy_id, Strategy.user_id == current_user.id)
     )
@@ -86,7 +86,7 @@ async def create_deployment(data: DeploymentCreate, current_user: CurrentUser, d
 
 
 @router.post("/{deployment_id}/start")
-async def start_deployment(deployment_id: uuid.UUID, current_user: CurrentUser, db: DbSession):
+async def start_deployment(deployment_id: uuid.UUID, current_user: VerifiedUser, db: DbSession):
     deployment = await _get_deployment(db, deployment_id, current_user.id)
     deployment.status = DeploymentStatus.RUNNING
     from datetime import datetime, timezone
