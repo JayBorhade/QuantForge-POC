@@ -49,6 +49,7 @@ class SettingsSecurityTests(unittest.TestCase):
             jwt_secret_key="j" * 48,
             database_url="postgresql+asyncpg://user:password@db:5432/quantforge",
             cookie_secure=True,
+            cookie_domain="quantforge.example",
             cookie_samesite="lax",
             cors_origins=["https://quantforge.example"],
             encryption_key="e" * 48,
