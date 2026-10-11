@@ -1,11 +1,11 @@
-"""Email service — SMTP with dev console fallback."""
+"""Email service — SMTP with a safe development fallback."""
 
 import logging
 from typing import Optional
-
-import aiosmtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+
+import aiosmtplib
 
 from app.core.config import get_settings
 
@@ -14,17 +14,15 @@ settings = get_settings()
 
 
 async def send_email(to: str, subject: str, html_body: str, text_body: Optional[str] = None) -> bool:
-    """Send email via SMTP. Logs to console in dev when SMTP not configured."""
-    text_body = text_body or html_body
+    """Send via SMTP; development fallback logs metadata only, never message content."""
+    text_body = text_body or ""
 
     if not settings.smtp_user or not settings.smtp_password:
-        logger.info(
-            "[EMAIL DEV] To: %s | Subject: %s\n%s",
-            to,
-            subject,
-            text_body[:500],
-        )
-        return True
+        if settings.app_env.strip().lower() not in {"development", "local", "test"}:
+            logger.error("email_delivery_unavailable environment=%s", settings.app_env)
+            return False
+        logger.info("email_dev_delivery_skipped recipient_domain=%s subject=%s", to.rpartition("@")[2], subject)
+        return False
 
     message = MIMEMultipart("alternative")
     message["From"] = settings.smtp_from
@@ -43,8 +41,8 @@ async def send_email(to: str, subject: str, html_body: str, text_body: Optional[
             start_tls=True,
         )
         return True
-    except Exception as e:
-        logger.error("Email send failed: %s", e)
+    except Exception:
+        logger.error("email_delivery_failed recipient_domain=%s", to.rpartition("@")[2])
         return False
 
 
@@ -53,7 +51,7 @@ async def send_verification_email(to: str, token: str) -> bool:
     html = f"""
     <h2>Verify your QuantForge account</h2>
     <p>Click the link below to verify your email:</p>
-    <p><a href="{url}">{url}</a></p>
+    <p><a href="{url}">Verify email</a></p>
     """
     return await send_email(to, "Verify your QuantForge email", html)
 
@@ -63,7 +61,7 @@ async def send_password_reset_email(to: str, token: str) -> bool:
     html = f"""
     <h2>Reset your QuantForge password</h2>
     <p>Click the link below (expires in 1 hour):</p>
-    <p><a href="{url}">{url}</a></p>
+    <p><a href="{url}">Reset password</a></p>
     """
     return await send_email(to, "Reset your QuantForge password", html)
 
