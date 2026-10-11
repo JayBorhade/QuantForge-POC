@@ -170,13 +170,13 @@ export function ProductUxControls() {
       )}
 
       {showTop && (
-        <button type="button" className={`fixed bottom-5 right-5 z-40 ux-icon-button shadow-lg ${isMarketing ? "bottom-20" : ""}`} aria-label="Back to top" title="Back to top" onClick={() => window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })}>
+        <button type="button" className={`back-to-top fixed right-5 z-40 ux-icon-button shadow-lg ${isMarketing ? "back-to-top--marketing" : ""}`} aria-label="Back to top" title="Back to top" onClick={() => window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })}>
           <ArrowUp aria-hidden="true" className="h-4 w-4" />
         </button>
       )}
 
       {isMarketing && (
-        <Link href="/contact" className="fixed bottom-5 right-5 z-30 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-card px-4 py-3 text-sm font-medium shadow-lg hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <Link href="/contact" className="floating-contact fixed right-5 z-30 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-card px-4 py-3 text-sm font-medium shadow-lg hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           Contact <ExternalLink aria-hidden="true" className="h-4 w-4" />
         </Link>
       )}
