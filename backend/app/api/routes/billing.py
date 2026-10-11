@@ -172,10 +172,14 @@ async def stripe_webhook(request: Request, db: DbSession):
     db.add(StripeWebhookEvent(event_id=event_id, event_type=event_type))
     try:
         await db.flush()
-    except IntegrityError:
-        # Concurrent delivery may race the pre-check. The unique primary key is
-        # the final authority; rollback the losing transaction and acknowledge.
+    except IntegrityError as exc:
+        # Concurrent delivery may race the pre-check. Only a real unique-key
+        # violation is a duplicate; other integrity failures must remain errors.
         await db.rollback()
+        original = exc.orig
+        sqlstate = getattr(original, "sqlstate", None) or getattr(original, "pgcode", None)
+        if sqlstate != "23505":
+            raise
         return {"received": True, "duplicate": True}
 
     obj = event["data"]
