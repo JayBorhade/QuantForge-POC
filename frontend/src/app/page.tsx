@@ -26,17 +26,17 @@ const features = [
   { icon: BarChart3, title: "Live Analytics", desc: "Real-time PnL, risk exposure, and sentiment." },
 ];
 
-const metrics = [
-  { label: "Strategies Deployed", value: "12,400+" },
-  { label: "Backtests Run", value: "2.1M+" },
-  { label: "Avg. Sharpe Ratio", value: "1.84" },
-  { label: "Uptime SLA", value: "99.97%" },
+const capabilities = [
+  { label: "Built-in strategies", value: "5 algorithms" },
+  { label: "Broker adapters", value: "3 integrations" },
+  { label: "Backtesting", value: "Historical analysis" },
+  { label: "Strategy workflow", value: "Paper trading" },
 ];
 
-const plans = [
-  { name: "Starter", price: "$29", features: ["5 strategies", "Paper trading", "Basic backtesting"] },
-  { name: "Pro", price: "$99", features: ["Unlimited strategies", "Live trading", "AI insights", "Priority support"], popular: true },
-  { name: "Enterprise", price: "Custom", features: ["Dedicated infra", "Custom brokers", "SLA", "White-label"] },
+const productPillars = [
+  { name: "Build strategies", features: ["Five built-in algorithm templates", "Paper strategy creation", "Reusable strategy configuration"] },
+  { name: "Backtest with context", features: ["Historical strategy evaluation", "Risk and performance analytics", "Trade-level results"] },
+  { name: "Connect your workflow", features: ["Listed broker adapters", "Portfolio and risk views", "Deployment management interface"] },
 ];
 
 export default function LandingPage() {
@@ -78,7 +78,7 @@ export default function LandingPage() {
 
       <section className="border-y border-white/5 bg-card/20 py-12">
         <div className="mx-auto grid max-w-7xl grid-cols-2 gap-8 px-4 sm:grid-cols-4 sm:px-6">
-          {metrics.map((m) => (
+          {capabilities.map((m) => (
             <div key={m.label} className="text-center">
               <p className="text-3xl font-bold text-gradient">{m.value}</p>
               <p className="mt-1 text-sm text-muted-foreground">{m.label}</p>
@@ -112,12 +112,12 @@ export default function LandingPage() {
 
       <section id="pricing" className="px-4 py-24 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
-          <h2 className="text-center text-3xl font-bold">Simple, transparent pricing</h2>
+          <h2 className="text-center text-3xl font-bold">A complete systematic trading workflow</h2>\n          <p className="mt-3 text-center text-sm text-muted-foreground">Explore the capabilities available in this repository. Current plans and prices are loaded from the billing service.</p>
           <div className="mt-12 grid gap-8 md:grid-cols-3">
-            {plans.map((plan) => (
+            {productPillars.map((plan) => (
               <Card
                 key={plan.name}
-                className={`relative p-6 ${"popular" in plan && plan.popular ? "glow-blue border-primary/50" : ""}`}
+                className="relative p-6"
               >
                 {"popular" in plan && plan.popular && (
                   <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-3 py-0.5 text-xs font-medium">
@@ -161,7 +161,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <footer className="border-t border-white/5 py-8 text-center text-sm text-muted-foreground">
+      </main>\n\n      <footer className="border-t border-white/5 py-8 text-center text-sm text-muted-foreground">
         © {new Date().getFullYear()} QuantForge. All rights reserved.
       </footer>
     </div>
