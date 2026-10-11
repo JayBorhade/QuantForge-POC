@@ -62,7 +62,7 @@ class BinanceBrokerAdapter:
     async def submit_order(self, request: BrokerOrderRequest) -> BrokerOrderResult:
         symbol = request.symbol.replace("/", "").upper()
         if len(request.client_order_id) > 36:
-            raise ValueError("Binance client_order_id must be 36 characters or fewer")
+            raise BrokerSubmissionRejected("Binance client_order_id must be 36 characters or fewer")
         params: dict[str, Any] = {
             "symbol": symbol,
             "side": request.side.value.upper(),
@@ -72,7 +72,7 @@ class BinanceBrokerAdapter:
         }
         if request.order_type is OrderType.LIMIT:
             if request.limit_price is None:
-                raise ValueError("Binance LIMIT order requires limit_price")
+                raise BrokerSubmissionRejected("Binance LIMIT order requires limit_price")
             params.update({"price": format(request.limit_price, "f"), "timeInForce": "GTC"})
         params.update(request.broker_params)
         try:
