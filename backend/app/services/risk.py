@@ -65,6 +65,24 @@ class RiskService:
             return RiskDecision(True)
 
         if limits.kill_switch:
+            # A kill switch blocks new/increasing exposure, but must not trap an
+            # account in a position. Permit only a SELL that closes no more than
+            # the currently held long quantity; never permit a short position.
+            if side is OrderSide.SELL:
+                position_result = await self.db.execute(
+                    select(Position).where(
+                        Position.portfolio_id == portfolio.id,
+                        Position.symbol == symbol,
+                    )
+                )
+                position = position_result.scalar_one_or_none()
+                held_quantity = (
+                    Decimal(str(position.quantity))
+                    if position is not None and position.quantity is not None
+                    else Decimal("0")
+                )
+                if held_quantity > 0 and quantity <= held_quantity:
+                    return RiskDecision(True, "Reduce-only exit allowed while kill switch is enabled")
             return RiskDecision(False, "Portfolio risk kill switch is enabled")
 
         if limits.max_daily_loss is not None and portfolio.daily_pnl <= -limits.max_daily_loss:
