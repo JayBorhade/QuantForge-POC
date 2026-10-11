@@ -70,3 +70,12 @@ The latest PR head also applies three targeted correctness/security fixes:
 - Backtest runs and audit events are committed before the Celery task is published, removing the race where a worker could start before the run row was committed. If dispatch fails, the existing in-process fallback is scheduled.
 
 These changes require the latest PR CI run to pass. They do not close the RLS, comprehensive adversarial IDOR/BOLA, or staging-validation release gates listed above.
+
+
+### Additional Phase 1–3 follow-up (latest candidate)
+- Access-token validation now rejects missing/empty `session_jti`; legacy unbound tokens no longer bypass revocation checks. Rollout must force re-authentication or otherwise ensure all clients receive session-bound tokens.
+- Risk-limit update semantics now preserve fields omitted from a partial request; kill-switch state is changed only when explicitly supplied. Risk event retrieval includes the `order.risk_rejected` action.
+- A kill switch blocks new exposure but allows a SELL that does not exceed the existing positive position, preserving a reduce-only exit path.
+- Backtest run status and audit event are committed before Celery dispatch to eliminate the uncommitted-row worker race.
+- Synthetic AI sentiment based on hard-coded headlines and pseudo-random social scores has been removed. The strategy now fails closed until a real provider is configured.
+- New focused tests cover these behaviors. Latest CI has been triggered and must pass before considering these source changes validated.
