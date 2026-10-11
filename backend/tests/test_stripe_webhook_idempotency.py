@@ -72,6 +72,22 @@ class StripeWebhookIdempotencyTests(unittest.TestCase):
         self.assertEqual(response, {"received": True, "duplicate": True})
         db.rollback.assert_awaited_once()
 
+
+    def test_non_duplicate_integrity_error_is_not_acknowledged(self):
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=Result(None))
+        db.flush = AsyncMock(side_effect=IntegrityError("insert", {}, SimpleNamespace(sqlstate="23502")))
+        event = {"id": "evt_invalid", "type": "customer.updated", "data": {}}
+
+        with patch("app.api.routes.billing.stripe_enabled", return_value=True), patch(
+            "app.api.routes.billing.handle_webhook_event", return_value=event
+        ):
+            with self.assertRaises(IntegrityError):
+                asyncio.run(stripe_webhook(request(), db))
+
+        db.rollback.assert_awaited_once()
+
+
     def test_verified_event_without_id_is_rejected(self):
         db = AsyncMock()
         event = {"type": "customer.updated", "data": {}}
