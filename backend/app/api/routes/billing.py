@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, VerifiedUser
 from app.models.subscription import PlanTier, Subscription, SubscriptionStatus
 from app.models.stripe_webhook_event import StripeWebhookEvent
 from app.services.audit import log_audit
@@ -90,7 +90,7 @@ async def get_subscription(current_user: CurrentUser, db: DbSession) -> Dict[str
 @router.post("/checkout")
 async def create_checkout(
     data: CheckoutRequest,
-    current_user: CurrentUser,
+    current_user: VerifiedUser,
     db: DbSession,
 ) -> Dict[str, str]:
     if not stripe_enabled():
