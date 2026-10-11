@@ -1,5 +1,6 @@
 """Authentication service."""
 
+import json
 import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -114,7 +115,7 @@ class AuthService:
         if user.two_factor_enabled:
             if not otp_code:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="2FA code required")
-            if not AuthService.verify_totp_once(user, otp_code):
+            if not AuthService.verify_totp_once(user, otp_code) and not AuthService.consume_recovery_code(user, otp_code):
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid 2FA code")
 
         jti = generate_token()[:32]
@@ -261,6 +262,21 @@ class AuthService:
         except (TypeError, ValueError):
             return False
         return False
+    @staticmethod
+    def consume_recovery_code(user: User, code: str) -> bool:
+        """Consume a single hashed recovery code exactly once."""
+        if not code or not user.two_factor_recovery_codes:
+            return False
+        try:
+            stored = json.loads(user.two_factor_recovery_codes)
+        except (TypeError, ValueError):
+            return False
+        digest = hash_one_time_token(code)
+        if digest not in stored:
+            return False
+        stored.remove(digest)
+        user.two_factor_recovery_codes = json.dumps(stored)
+        return True
     @staticmethod
     def setup_2fa(user: User) -> Tuple[str, str]:
         secret = pyotp.random_base32()
