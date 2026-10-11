@@ -5,6 +5,11 @@ import unittest
 import uuid
 from unittest.mock import AsyncMock
 
+from fastapi import HTTPException
+from types import SimpleNamespace
+
+from app.core.security import create_access_token
+from app.api.deps import get_current_user
 from app.services.auth import AuthService
 
 
@@ -76,6 +81,57 @@ class AuthSessionRevocationTests(unittest.TestCase):
         self.assertIsNone(user.password_reset_token)
         self.assertIsNone(user.password_reset_expires)
         self.assertNotEqual(user.hashed_password, "old-hash")
+
+
+
+class ScalarResult:
+    def __init__(self, value):
+        self.value = value
+
+    def scalar_one_or_none(self):
+        return self.value
+
+
+class SessionBoundAccessTokenTests(unittest.TestCase):
+    def test_active_session_bound_access_token_is_accepted(self):
+        user_id = uuid.uuid4()
+        user = SimpleNamespace(id=user_id, is_active=True, is_banned=False)
+        session = SimpleNamespace(is_active=True)
+        db = AsyncMock()
+        db.execute = AsyncMock(side_effect=[ScalarResult(session), ScalarResult(user)])
+        request = SimpleNamespace(headers={})
+        token = create_access_token(str(user_id), {"session_jti": "session-1"})
+
+        resolved = asyncio.run(get_current_user(request, db, token))
+
+        self.assertIs(resolved, user)
+        self.assertEqual(db.execute.await_count, 2)
+
+    def test_revoked_session_bound_access_token_is_rejected(self):
+        user_id = uuid.uuid4()
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=ScalarResult(None))
+        request = SimpleNamespace(headers={})
+        token = create_access_token(str(user_id), {"session_jti": "revoked-session"})
+
+        with self.assertRaises(HTTPException) as error:
+            asyncio.run(get_current_user(request, db, token))
+
+        self.assertEqual(error.exception.status_code, 401)
+        self.assertEqual(db.execute.await_count, 1)
+
+    def test_legacy_access_token_remains_valid_until_expiry(self):
+        user_id = uuid.uuid4()
+        user = SimpleNamespace(id=user_id, is_active=True, is_banned=False)
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=ScalarResult(user))
+        request = SimpleNamespace(headers={})
+        token = create_access_token(str(user_id))
+
+        resolved = asyncio.run(get_current_user(request, db, token))
+
+        self.assertIs(resolved, user)
+        db.execute.assert_awaited_once()
 
 
 if __name__ == "__main__":
