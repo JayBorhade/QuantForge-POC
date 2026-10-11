@@ -205,13 +205,13 @@ class ExecutionService:
             )
         except (BrokerSubmissionUnknown, httpx.TransportError) as exc:
             order.status = OrderStatus.SUBMISSION_UNKNOWN
-            order.rejection_reason = str(exc)[:512]
+            order.rejection_reason = "Broker submission outcome unknown; reconciliation required"
             await log_audit(
                 self.db,
                 action="order.submission_unknown",
                 resource="order",
                 resource_id=str(order.id),
-                details={"error": str(exc)[:512], "mode": order.mode.value},
+                details={"error_type": type(exc).__name__, "mode": order.mode.value},
             )
             # Return normally so the request/task transaction commits the
             # SUBMISSION_UNKNOWN record. Raising here would roll it back and
