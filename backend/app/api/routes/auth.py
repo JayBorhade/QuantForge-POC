@@ -229,6 +229,7 @@ async def verify_email(data: VerifyEmailRequest, request: Request, db: DbSession
 @router.post("/2fa/setup", response_model=TwoFactorSetupResponse)
 @limiter.limit("3/minute")
 async def setup_2fa(request: Request, current_user: CurrentUser, db: DbSession):
+    await enforce_account_rate_limit(current_user.email, "2fa-setup", limit=3, window_seconds=3600)
     # Never silently replace a factor that is already protecting the account.
     if current_user.two_factor_enabled:
         raise HTTPException(
@@ -245,6 +246,7 @@ async def setup_2fa(request: Request, current_user: CurrentUser, db: DbSession):
 @router.post("/2fa/enable")
 @limiter.limit("5/minute")
 async def enable_2fa(data: TwoFactorVerifyRequest, request: Request, current_user: CurrentUser, db: DbSession):
+    await enforce_account_rate_limit(current_user.email, "2fa-enable", limit=5, window_seconds=3600)
     if not current_user.two_factor_secret:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Setup 2FA first")
 
@@ -267,6 +269,7 @@ async def enable_2fa(data: TwoFactorVerifyRequest, request: Request, current_use
 @router.post("/2fa/disable")
 @limiter.limit("5/minute")
 async def disable_2fa(data: TwoFactorVerifyRequest, request: Request, current_user: CurrentUser, db: DbSession):
+    await enforce_account_rate_limit(current_user.email, "2fa-disable", limit=5, window_seconds=3600)
     if not current_user.two_factor_secret:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="2FA is not configured")
     if not AuthService.verify_totp_once(current_user, data.otp_code):
