@@ -55,13 +55,13 @@ function ResetForm() {
 
 export default function ResetPasswordPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
+    <main id="page-content" tabIndex={-1} className="flex min-h-screen items-center justify-center px-4 outline-none">
       <Card className="w-full max-w-md p-8">
         <h1 className="text-2xl font-bold">Set new password</h1>
         <Suspense fallback={<p className="mt-4 text-muted-foreground">Loading...</p>}>
           <div className="mt-6"><ResetForm /></div>
         </Suspense>
       </Card>
-    </div>
+    </main>
   );
 }
