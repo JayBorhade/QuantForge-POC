@@ -102,7 +102,7 @@ export default function LogsPage() {
                   {entry.metrics && (
                     <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
                       {entry.metrics.sharpe != null && <span>Sharpe: {entry.metrics.sharpe.toFixed(2)}</span>}
-                      {entry.metrics.return != null && <span>Return: {entry.metrics.return.toFixed(2)}%</span>}
+                      {entry.metrics.return != null && <span>Return metric: {entry.metrics.return.toFixed(4)}</span>}
                     </div>
                   )}
                 </article>
