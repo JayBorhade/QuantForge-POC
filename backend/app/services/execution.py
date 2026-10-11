@@ -78,6 +78,19 @@ class ExecutionService:
             text("SELECT pg_advisory_xact_lock(hashtext(:portfolio_id))"),
             {"portfolio_id": str(portfolio.id)},
         )
+        # Re-check idempotency after acquiring the portfolio lock. A competing
+        # request may have committed the same client ID while this request
+        # waited for the lock.
+        duplicate_after_lock = await self.db.execute(
+            select(Order).where(
+                Order.portfolio_id == portfolio.id,
+                Order.client_order_id == client_order_id,
+            )
+        )
+        existing_after_lock = duplicate_after_lock.scalar_one_or_none()
+        if existing_after_lock is not None:
+            return existing_after_lock
+
         try:
             await RiskService(self.db).require_approval(
                 portfolio=portfolio,
