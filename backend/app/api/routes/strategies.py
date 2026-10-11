@@ -136,6 +136,13 @@ async def run_backtest(
             run_id=str(run.id),
         )
 
+    # Persist the run before publishing its identifier to Celery. A worker can
+    # start immediately; enqueueing before commit creates a race where it cannot
+    # find the run and then incorrectly marks the task as failed.
+    run.status = RunStatus.RUNNING
+    await log_audit(db, action="strategy.backtest", user_id=current_user.id, resource_id=str(run.id))
+    await db.commit()
+
     try:
         from app.tasks.strategy_tasks import run_backtest_task
 
@@ -146,12 +153,10 @@ async def run_backtest(
             data.end_date.isoformat(),
             data.initial_capital,
         )
-        run.status = RunStatus.RUNNING
     except Exception:
+        # The durable run already exists. Fall back to the app's in-process
+        # runner rather than losing a committed request.
         background_tasks.add_task(_execute)
-        run.status = RunStatus.RUNNING
-
-    await log_audit(db, action="strategy.backtest", user_id=current_user.id, resource_id=str(run.id))
 
     return BacktestResponse(
         run_id=run.id,
