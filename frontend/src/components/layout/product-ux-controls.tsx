@@ -33,11 +33,11 @@ export function ProductUxControls() {
   const searchDialogRef = useRef<HTMLElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
-  const isMarketing = !pathname.startsWith("/dashboard") && pathname !== "/admin";
+  const isMarketing = ["/", "/features", "/pricing", "/docs", "/blog", "/contact"].includes(pathname) || pathname.startsWith("/blog/");
   const hasReadingProgress = pathname === "/docs" || pathname.startsWith("/blog");
 
   useEffect(() => {
-    const stored = window.localStorage.getItem("quantforge-theme");
+    let stored: string | null = null;\n    try { stored = window.localStorage.getItem("quantforge-theme"); } catch { /* Use the system preference when storage is unavailable. */ }
     const initial = stored === "light" || stored === "dark"
       ? stored
       : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
@@ -105,7 +105,7 @@ export function ProductUxControls() {
     setTheme(next);
     document.documentElement.classList.toggle("dark", next === "dark");
     document.documentElement.style.colorScheme = next;
-    window.localStorage.setItem("quantforge-theme", next);
+    try { window.localStorage.setItem("quantforge-theme", next); } catch { /* The current page theme still updates if storage is blocked. */ }
   };
 
   const contentTarget = pathname.startsWith("/dashboard") ? "#dashboard-main-content" : "#page-content";
@@ -133,7 +133,7 @@ export function ProductUxControls() {
         </div>
       )}
 
-      <div className="fixed right-4 top-20 z-[60] flex items-center gap-2">
+      <div className={`fixed right-4 z-[60] flex items-center gap-2 ${pathname.startsWith("/dashboard") ? "top-4" : "top-20"}`}>
         <button type="button" onClick={(event) => { previousFocusRef.current = event.currentTarget; setSearchOpen(true); setQuery(""); }} aria-label="Search site" title="Search site" className="ux-icon-button">
           <Search aria-hidden="true" className="h-4 w-4" />
         </button>
