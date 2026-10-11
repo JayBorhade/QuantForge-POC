@@ -18,6 +18,7 @@ export default function LoginPage() {
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
   const [needs2fa, setNeeds2fa] = useState(false);
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
   const [registeredMessage, setRegisteredMessage] = useState("");
 
   useEffect(() => {
@@ -64,8 +65,11 @@ export default function LoginPage() {
           </div>
           {needs2fa && (
             <div>
-              <label htmlFor="login-otp" className="text-sm text-muted-foreground">2FA Code</label>
-              <Input id="login-otp" name="otp" inputMode="numeric" autoComplete="one-time-code" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))} maxLength={6} className="mt-1" />
+              <label htmlFor="login-otp" className="text-sm text-muted-foreground">{useRecoveryCode ? "Recovery Code" : "2FA Code"}</label>
+              <Input id="login-otp" name="otp" inputMode={useRecoveryCode ? "text" : "numeric"} autoComplete="one-time-code" value={otp} onChange={(e) => setOtp(useRecoveryCode ? e.target.value.slice(0, 64) : e.target.value.replace(/\D/g, "").slice(0, 6))} maxLength={useRecoveryCode ? 64 : 6} minLength={useRecoveryCode ? 8 : 6} required className="mt-1" />
+              <button type="button" className="mt-2 text-xs text-primary hover:underline" onClick={() => { setUseRecoveryCode(!useRecoveryCode); setOtp(""); }}>
+                {useRecoveryCode ? "Use authenticator code instead" : "Use a recovery code instead"}
+              </button>
             </div>
           )}
           <div className="flex items-center justify-between text-sm">
