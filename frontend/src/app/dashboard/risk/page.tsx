@@ -52,6 +52,7 @@ export default function RiskPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [limits, setLimits] = useState<Limits>(emptyLimits);
   const [saving, setSaving] = useState(false);
+  const [savedKillSwitch, setSavedKillSwitch] = useState(false);
   const [message, setMessage] = useState("");
 
   const load = async (id: string) => {
@@ -61,14 +62,21 @@ export default function RiskPage() {
       riskApi.limits(id),
     ]);
     setSummary(summaryRes.data);
-    setLimits(limitsRes.data ?? emptyLimits);
+    const nextLimits = limitsRes.data ?? emptyLimits;
+    setLimits(nextLimits);
+    setSavedKillSwitch(Boolean(nextLimits.kill_switch));
   };
 
   useEffect(() => {
     portfolioApi.list().then((r) => {
-      setPortfolios(r.data);
-      if (r.data[0]) setPortfolioId(r.data[0].id);
-    }).catch(() => setPortfolios([]));
+      const items = Array.isArray(r.data) ? r.data : [];
+      setPortfolios(items);
+      if (items[0]) setPortfolioId(items[0].id);
+      else setMessage("No portfolio is available for risk controls.");
+    }).catch(() => {
+      setPortfolios([]);
+      setMessage("Unable to load portfolios for risk controls.");
+    });
   }, []);
 
   useEffect(() => {
@@ -83,7 +91,15 @@ export default function RiskPage() {
   };
 
   const save = async () => {
-    if (!portfolioId) return;
+    if (!portfolioId || saving) return;
+    if (limits.kill_switch !== savedKillSwitch) {
+      const action = limits.kill_switch ? "enable" : "disable";
+      const confirmed = window.confirm(`Are you sure you want to ${action} the portfolio kill switch? This changes a critical trading safeguard.`);
+      if (!confirmed) {
+        setLimits((current) => ({ ...current, kill_switch: savedKillSwitch }));
+        return;
+      }
+    }
     setSaving(true);
     setMessage("");
     try {
