@@ -18,8 +18,8 @@ depends_on: Union[str, None] = None
 
 
 def _digest(value: str) -> str:
-    # codeql[py/weak-sensitive-data-hashing] These are high-entropy, single-use tokens, not passwords.
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+    # These are high-entropy, single-use tokens, not low-entropy passwords.
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()  # lgtm[py/weak-sensitive-data-hashing]
 
 
 def upgrade() -> None:

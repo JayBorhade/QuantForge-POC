@@ -19,8 +19,8 @@ _PASSWORD_HASH_PREFIX = "bcrypt-sha256$"
 
 def _password_material(password: str) -> bytes:
     # bcrypt truncates inputs beyond 72 bytes; pre-hashing prevents collisions.
-    # codeql[py/weak-sensitive-data-hashing] bcrypt adds the per-hash salt and work factor after this bcrypt-sha256 prehash.
-    return base64.b64encode(hashlib.sha256(password.encode("utf-8")).digest())
+    # bcrypt-sha256 prehashing prevents bcrypt's 72-byte truncation; bcrypt still salts and slows each stored hash.
+    return base64.b64encode(hashlib.sha256(password.encode("utf-8")).digest())  # lgtm[py/weak-sensitive-data-hashing]
 
 
 def hash_password(password: str) -> str:
