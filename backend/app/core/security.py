@@ -1,7 +1,7 @@
 """Security utilities: JWT, password hashing, tokens."""
 
-import base64
 import hashlib
+import hmac
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
@@ -14,13 +14,14 @@ from app.core.config import get_settings
 settings = get_settings()
 
 
-_PASSWORD_HASH_PREFIX = "bcrypt-sha256$"
+_PASSWORD_HASH_PREFIX = "bcrypt-72$"
 
 
 def _password_material(password: str) -> bytes:
-    # bcrypt truncates inputs beyond 72 bytes; pre-hashing prevents collisions.
-    # bcrypt-sha256 prehashing prevents bcrypt's 72-byte truncation; bcrypt still salts and slows each stored hash.
-    return base64.b64encode(hashlib.sha256(password.encode("utf-8")).digest())  # lgtm[py/weak-sensitive-data-hashing]
+    material = password.encode("utf-8")
+    if len(material) > 72:
+        raise ValueError("Password must be at most 72 UTF-8 bytes")
+    return material
 
 
 def hash_password(password: str) -> str:
@@ -87,8 +88,8 @@ def generate_token() -> str:
 
 
 def hash_one_time_token(token: str) -> str:
-    """Hash password-reset and email-verification tokens before database storage."""
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+    """Key password-reset and email-verification digests before database storage."""
+    return hmac.new(settings.jwt_secret_key.encode("utf-8"), token.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def generate_otp() -> str:

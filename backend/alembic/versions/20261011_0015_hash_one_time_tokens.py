@@ -4,8 +4,6 @@ Revision ID: 20261011_0015
 Revises: 20261011_0014
 Create Date: 2026-10-11
 """
-from datetime import datetime, timedelta, timezone
-import hashlib
 from typing import Sequence, Union
 
 from alembic import op
@@ -17,41 +15,20 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, None] = None
 
 
-def _digest(value: str) -> str:
-    # These are high-entropy, single-use tokens, not low-entropy passwords.
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()  # lgtm[py/weak-sensitive-data-hashing]
-
-
 def upgrade() -> None:
     op.add_column(
         "users",
         sa.Column("email_verification_expires", sa.DateTime(timezone=True), nullable=True),
     )
     bind = op.get_bind()
-    now = datetime.now(timezone.utc)
-    rows = bind.execute(
+    # Legacy plaintext tokens cannot be safely converted to keyed digests without
+    # retaining their raw values in application code. Invalidate them on upgrade.
+    bind.execute(
         sa.text(
-            "SELECT id, email_verification_token, password_reset_token "
-            "FROM users WHERE email_verification_token IS NOT NULL "
-            "OR password_reset_token IS NOT NULL"
+            "UPDATE users SET email_verification_token = NULL, password_reset_token = NULL "
+            "WHERE email_verification_token IS NOT NULL OR password_reset_token IS NOT NULL"
         )
-    ).mappings().all()
-    for row in rows:
-        values = {"user_id": row["id"]}
-        assignments = []
-        if row["email_verification_token"]:
-            assignments.append("email_verification_token = :email_token")
-            values["email_token"] = _digest(row["email_verification_token"])
-            values["verification_expires"] = now + timedelta(hours=24)
-            assignments.append("email_verification_expires = :verification_expires")
-        if row["password_reset_token"]:
-            assignments.append("password_reset_token = :reset_token")
-            values["reset_token"] = _digest(row["password_reset_token"])
-        if assignments:
-            bind.execute(
-                sa.text(f"UPDATE users SET {', '.join(assignments)} WHERE id = :user_id"),
-                values,
-            )
+    )
 
 
 def downgrade() -> None:

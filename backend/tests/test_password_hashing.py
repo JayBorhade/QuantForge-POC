@@ -5,13 +5,11 @@ import bcrypt
 from app.core.security import hash_password, needs_password_rehash, verify_password
 
 class PasswordHashingTests(unittest.TestCase):
-    def test_new_hash_does_not_truncate_password_after_72_bytes(self):
-        prefix = "A" * 72
-        first = prefix + "first-suffix"
-        second = prefix + "second-suffix"
-        hashed = hash_password(first)
-        self.assertTrue(verify_password(first, hashed))
-        self.assertFalse(verify_password(second, hashed))
+    def test_new_hash_rejects_passwords_over_bcrypt_limit(self):
+        with self.assertRaises(ValueError):
+            hash_password("A" * 73)
+        hashed = hash_password("A" * 72)
+        self.assertTrue(verify_password("A" * 72, hashed))
         self.assertFalse(needs_password_rehash(hashed))
 
     def test_legacy_bcrypt_hash_remains_valid_and_is_marked_for_upgrade(self):
