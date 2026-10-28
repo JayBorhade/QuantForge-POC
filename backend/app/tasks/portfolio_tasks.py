@@ -3,7 +3,7 @@
 import asyncio
 import logging
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.celery_app import celery_app
 from app.db.session import AsyncSessionLocal
@@ -12,6 +12,20 @@ from app.services.portfolio_history import PortfolioHistoryService
 from app.services.portfolio_valuation import LatestExecutionQuoteProvider, PortfolioValuationService
 
 logger = logging.getLogger(__name__)
+
+
+@celery_app.task(bind=True, max_retries=0, ignore_result=False)
+def reset_daily_portfolio_pnl(self):
+    """Reset the UTC-day P&L accumulator at the start of each trading day."""
+    async def _run():
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(update(Portfolio).values(daily_pnl=0))
+            await db.commit()
+            affected = int(result.rowcount or 0)
+            logger.info("Daily portfolio P&L reset completed portfolios=%s", affected)
+            return {"reset": affected, "timezone": "UTC"}
+
+    return asyncio.run(_run())
 
 
 @celery_app.task(bind=True, max_retries=0, ignore_result=False)

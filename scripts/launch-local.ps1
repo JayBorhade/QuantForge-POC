@@ -27,8 +27,8 @@ Write-Host "Installing backend dependencies..." -ForegroundColor Gray
 & $VenvPip install -q -r (Join-Path $BackendDir "requirements.txt")
 
 $env:DATABASE_URL = "sqlite+aiosqlite:///$BackendDir/quantforge.db"
-$env:SECRET_KEY = "qf-launch-secret-key-change-before-production-2026!!"
-$env:JWT_SECRET_KEY = "qf-launch-jwt-secret-key-change-before-production!!"
+$env:SECRET_KEY = (& $VenvPython -c "import secrets; print(secrets.token_urlsafe(48))").Trim()
+$env:JWT_SECRET_KEY = (& $VenvPython -c "import secrets; print(secrets.token_urlsafe(48))").Trim()
 $env:FRONTEND_URL = "http://localhost:3000"
 $env:BACKEND_URL = "http://localhost:8000"
 $env:CSRF_ENABLED = "true"
@@ -38,15 +38,15 @@ $env:REDIS_URL = "redis://localhost:6379/0"
 # Start backend
 Write-Host "Starting API on http://localhost:8000 ..." -ForegroundColor Green
 $backendJob = Start-Job -ScriptBlock {
-    param($py, $dir)
+    param($py, $dir, $secretKey, $jwtSecretKey)
     Set-Location $dir
     $env:DATABASE_URL = "sqlite+aiosqlite:///$dir/quantforge.db"
-    $env:SECRET_KEY = "qf-launch-secret-key-change-before-production-2026!!"
-    $env:JWT_SECRET_KEY = "qf-launch-jwt-secret-key-change-before-production!!"
+    $env:SECRET_KEY = $secretKey
+    $env:JWT_SECRET_KEY = $jwtSecretKey
     $env:FRONTEND_URL = "http://localhost:3000"
     $env:CSRF_ENABLED = "true"
     & $py -m uvicorn app.main:app --host 0.0.0.0 --port 8000
-} -ArgumentList $VenvPython, $BackendDir
+} -ArgumentList $VenvPython, $BackendDir, $env:SECRET_KEY, $env:JWT_SECRET_KEY
 
 Start-Sleep -Seconds 5
 try {

@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 
 import httpx
 
-from app.brokers.base import BrokerOrderRequest, BrokerOrderResult, BrokerSubmissionUnknown
+from app.brokers.base import BrokerOrderRequest, BrokerOrderResult, BrokerSubmissionUnknown, BrokerSubmissionRejected
 from app.models.order import OrderType
 
 
@@ -37,7 +37,7 @@ class BinanceBrokerAdapter:
 
     @staticmethod
     def _status(value: str) -> str:
-        return {
+        status_map = {
             "NEW": "submitted",
             "PENDING_NEW": "pending",
             "PARTIALLY_FILLED": "partially_filled",
@@ -45,7 +45,11 @@ class BinanceBrokerAdapter:
             "CANCELED": "cancelled",
             "REJECTED": "rejected",
             "EXPIRED": "cancelled",
-        }.get(value.upper(), "failed")
+        }
+        normalized = value.upper()
+        if normalized not in status_map:
+            raise ValueError("Unsupported Binance order status")
+        return status_map[normalized]
 
     async def connect(self) -> bool:
         try:
@@ -62,7 +66,7 @@ class BinanceBrokerAdapter:
     async def submit_order(self, request: BrokerOrderRequest) -> BrokerOrderResult:
         symbol = request.symbol.replace("/", "").upper()
         if len(request.client_order_id) > 36:
-            raise ValueError("Binance client_order_id must be 36 characters or fewer")
+            raise BrokerSubmissionRejected("Binance client_order_id must be 36 characters or fewer")
         params: dict[str, Any] = {
             "symbol": symbol,
             "side": request.side.value.upper(),
@@ -72,7 +76,7 @@ class BinanceBrokerAdapter:
         }
         if request.order_type is OrderType.LIMIT:
             if request.limit_price is None:
-                raise ValueError("Binance LIMIT order requires limit_price")
+                raise BrokerSubmissionRejected("Binance LIMIT order requires limit_price")
             params.update({"price": format(request.limit_price, "f"), "timeInForce": "GTC"})
         params.update(request.broker_params)
         try:
@@ -84,9 +88,17 @@ class BinanceBrokerAdapter:
                 )
         except httpx.TransportError as exc:
             raise BrokerSubmissionUnknown(f"Binance submission transport outcome is unknown: {exc}") from exc
+        if response.status_code >= 500:
+            raise BrokerSubmissionUnknown(
+                f"Binance returned HTTP {response.status_code}; order outcome is unknown"
+            )
         data = response.json()
-        if response.status_code >= 400 or "orderId" not in data:
-            raise RuntimeError(data.get("msg") or f"Binance order failed ({response.status_code})")
+        if response.status_code >= 400:
+            raise BrokerSubmissionRejected(
+                data.get("msg") or f"Binance rejected the order ({response.status_code})"
+            )
+        if "orderId" not in data:
+            raise BrokerSubmissionUnknown("Binance response omitted order id; submission outcome is unknown")
         executed_qty = Decimal(str(data.get("executedQty", "0")))
         cumulative_quote = Decimal(str(data.get("cummulativeQuoteQty", "0")))
         average_price = (cumulative_quote / executed_qty) if executed_qty > 0 else None

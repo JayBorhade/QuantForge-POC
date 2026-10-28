@@ -98,8 +98,10 @@ class TradeLedgerTests(unittest.TestCase):
         self.assertEqual(closed.quantity, Decimal("4"))
         self.assertEqual(closed.entry_price, Decimal("100"))
         self.assertEqual(closed.exit_price, Decimal("120"))
-        self.assertEqual(closed.pnl, Decimal("80"))
+        self.assertEqual(closed.pnl, Decimal("77.6"))
+        self.assertEqual(closed.fees, Decimal("2.4"))
         self.assertEqual(open_trade.quantity, Decimal("6"))
+        self.assertEqual(open_trade.fees, Decimal("0.6"))
 
     def test_sell_without_trade_history_still_creates_auditable_close(self):
         order = make_order(OrderSide.SELL)
@@ -119,7 +121,8 @@ class TradeLedgerTests(unittest.TestCase):
         )
 
         self.assertEqual(closed.status, TradeStatus.CLOSED)
-        self.assertEqual(closed.pnl, Decimal("40"))
+        self.assertEqual(closed.pnl, Decimal("39"))
+        self.assertEqual(closed.fees, Decimal("1"))
         self.assertEqual(closed.entry_price, Decimal("100"))
 
 

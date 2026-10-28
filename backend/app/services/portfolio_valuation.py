@@ -101,8 +101,10 @@ class PortfolioValuationService:
                 raise PortfolioValuationError(
                     f"Quote provider returned an invalid price for {position.symbol}"
                 ) from exc
-            if market_price <= 0:
-                raise PortfolioValuationError(f"Market price must be positive for {position.symbol}")
+            if not market_price.is_finite() or market_price <= 0:
+                raise PortfolioValuationError(
+                    f"Market price must be finite and positive for {position.symbol}"
+                )
 
             value = position.quantity * market_price
             unrealized = (market_price - position.average_cost) * position.quantity
