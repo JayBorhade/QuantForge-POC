@@ -28,6 +28,7 @@ class OrderLifecycleTests(unittest.TestCase):
         db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: locked))
         broker = MagicMock()
         broker.cancel_order = AsyncMock()
+        broker.get_order = AsyncMock(return_value=BrokerOrderResult("paper-1", "cancelled"))
         order = MagicMock(id="order-1")
 
         result = asyncio.run(OrderLifecycleService(db, broker).cancel(order))
@@ -35,7 +36,22 @@ class OrderLifecycleTests(unittest.TestCase):
         self.assertIs(result, locked)
         self.assertEqual(locked.status, OrderStatus.CANCELLED)
         broker.cancel_order.assert_awaited_once_with("paper-1")
+        broker.get_order.assert_awaited_once_with("paper-1")
         self.assertGreaterEqual(db.flush.await_count, 1)
+
+    def test_cancel_is_not_marked_until_broker_confirms(self):
+        db = MagicMock()
+        db.flush = AsyncMock()
+        locked = MagicMock(status=OrderStatus.SUBMITTED, broker_order_id="paper-2")
+        db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: locked))
+        broker = MagicMock()
+        broker.cancel_order = AsyncMock()
+        broker.get_order = AsyncMock(return_value=BrokerOrderResult("paper-2", "filled"))
+
+        with self.assertRaisesRegex(ValueError, "has not confirmed cancellation"):
+            asyncio.run(OrderLifecycleService(db, broker).cancel(MagicMock(id="order-2")))
+
+        self.assertEqual(locked.status, OrderStatus.SUBMITTED)
 
     def test_terminal_order_cannot_be_cancelled(self):
         db = MagicMock()

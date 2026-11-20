@@ -14,14 +14,13 @@ class StrategyEngine:
     """Runs strategies in live or paper mode."""
 
     async def run(self, strategy_id: str, mode: str = "paper") -> Dict[str, Any]:
-        # In production, load strategy from DB via async session
-        logger.info("Executing strategy %s in %s mode", strategy_id, mode)
-        return {
-            "strategy_id": strategy_id,
-            "mode": mode,
-            "status": "completed",
-            "signals_generated": 0,
-        }
+        # This compatibility method never executed a strategy despite returning
+        # a successful-looking result. Fail explicitly until callers use the
+        # canonical persisted strategy runtime.
+        logger.warning("Legacy strategy engine invoked; no execution was performed")
+        raise RuntimeError(
+            "Legacy strategy engine is unavailable; use the canonical paper strategy runtime"
+        )
 
     def fetch_data(self, symbol: str, period: str = "3mo", interval: str = "1d"):
         ticker = yf.Ticker(symbol)

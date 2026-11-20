@@ -18,6 +18,7 @@ export default function SettingsPage() {
   const [twoFaEnabled, setTwoFaEnabled] = useState(false);
   const [qrUri, setQrUri] = useState("");
   const [otp, setOtp] = useState("");
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [securityAction, setSecurityAction] = useState<"setup" | "enable" | "disable" | null>(null);
@@ -107,11 +108,12 @@ export default function SettingsPage() {
     setError("");
     setMessage("");
     try {
-      await api.post("/auth/2fa/enable", { otp_code: otp });
+      const { data } = await api.post("/auth/2fa/enable", { otp_code: otp });
+      setRecoveryCodes(Array.isArray(data.recovery_codes) ? data.recovery_codes : []);
       setTwoFaEnabled(true);
       setQrUri("");
       setOtp("");
-      setMessage("Two-factor authentication enabled successfully.");
+      setMessage("Two-factor authentication enabled. Save the recovery codes below; they are shown only once.");
       void fetchUser();
     } catch {
       setError("Two-factor authentication could not be enabled. Verify the code and try again.");
@@ -133,6 +135,7 @@ export default function SettingsPage() {
     try {
       await api.post("/auth/2fa/disable", { otp_code: otp });
       setTwoFaEnabled(false);
+      setRecoveryCodes([]);
       setOtp("");
       setMessage("Two-factor authentication disabled.");
       void fetchUser();
@@ -148,6 +151,16 @@ export default function SettingsPage() {
       <DashboardHeader title="Settings" subtitle="Account, security, and preferences" />
       {error && <p className="mb-4 rounded-lg border border-red-500/30 p-3 text-sm text-red-500" role="alert" aria-live="assertive">{error}</p>}
       {message && <p className="mb-4 rounded-lg border border-primary/20 p-3 text-sm text-muted-foreground" role="status" aria-live="polite">{message}</p>}
+      {recoveryCodes.length > 0 && (
+        <section className="mb-4 max-w-2xl rounded-lg border border-amber-500/40 bg-amber-500/5 p-4" aria-labelledby="recovery-codes-heading">
+          <h2 id="recovery-codes-heading" className="font-semibold">Save your one-time recovery codes</h2>
+          <p className="my-2 text-sm text-muted-foreground">Each code works once if you lose access to your authenticator. Store them somewhere private; this list will disappear when you leave or reload the page.</p>
+          <ul className="grid grid-cols-2 gap-2 font-mono text-sm" aria-label="Recovery codes">
+            {recoveryCodes.map((code) => <li key={code} className="rounded bg-secondary p-2">{code}</li>)}
+          </ul>
+          <Button className="mt-3" variant="outline" onClick={() => { void navigator.clipboard.writeText(recoveryCodes.join("\n")); }}>Copy recovery codes</Button>
+        </section>
+      )}
       <div className="grid max-w-2xl gap-6">
         <Card className="space-y-4 p-6">
           <h2 className="font-semibold">Profile</h2>

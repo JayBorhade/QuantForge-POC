@@ -33,12 +33,12 @@ class FillService:
         broker_fill_id: str | None = None,
         executed_at: datetime | None = None,
     ) -> ExecutionFill:
-        if quantity <= 0:
-            raise FillAccountingError("Fill quantity must be positive")
-        if price <= 0:
-            raise FillAccountingError("Fill price must be positive")
-        if fee < 0:
-            raise FillAccountingError("Fill fee cannot be negative")
+        if not quantity.is_finite() or quantity <= 0:
+            raise FillAccountingError("Fill quantity must be finite and positive")
+        if not price.is_finite() or price <= 0:
+            raise FillAccountingError("Fill price must be finite and positive")
+        if not fee.is_finite() or fee < 0:
+            raise FillAccountingError("Fill fee must be finite and non-negative")
 
         # Lock order first so concurrent fills for one order serialize.
         order_result = await self.db.execute(
@@ -104,14 +104,14 @@ class FillService:
             old_qty = position.quantity
             new_qty = old_qty + quantity
             position.average_cost = (
-                ((old_qty * position.average_cost) + (quantity * price)) / new_qty
+                ((old_qty * position.average_cost) + (quantity * price) + fee) / new_qty
                 if new_qty else Decimal("0")
             )
             position.quantity = new_qty
         else:
             if position.quantity < quantity:
                 raise FillAccountingError("Cannot sell more than the current position")
-            position.realized_pnl += (price - position.average_cost) * quantity
+            position.realized_pnl += (price - position.average_cost) * quantity - fee
             position.quantity -= quantity
             if position.quantity == 0:
                 position.average_cost = Decimal("0")

@@ -15,7 +15,7 @@ export type WsMessage = {
   tick?: number;
 };
 
-export function useWebSocket(token?: string | null) {
+export function useWebSocket(_token?: string | null) {
   const [connected, setConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<WsMessage | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -24,8 +24,8 @@ export function useWebSocket(token?: string | null) {
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
-    const url = token ? `${WS_URL}?token=${encodeURIComponent(token)}` : WS_URL;
-    const ws = new WebSocket(url);
+    // Authentication is carried by the HttpOnly access_token cookie; never put JWTs in URLs.
+    const ws = new WebSocket(WS_URL);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -52,7 +52,7 @@ export function useWebSocket(token?: string | null) {
     };
 
     ws.onerror = () => setConnected(false);
-  }, [token]);
+  }, []);
 
   const disconnect = useCallback(() => {
     if (pingRef.current) clearInterval(pingRef.current);

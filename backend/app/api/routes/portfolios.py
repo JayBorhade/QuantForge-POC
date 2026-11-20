@@ -1,11 +1,12 @@
 """Portfolio management routes."""
 
+import logging
 import uuid
 from decimal import Decimal
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
@@ -22,12 +23,21 @@ from app.services.portfolio_valuation import (
 )
 
 router = APIRouter(prefix="/portfolios", tags=["Portfolios"])
+logger = logging.getLogger("quantforge.portfolios")
 
 
 class PortfolioCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=128)
     currency: str = "USD"
-    initial_capital: float = Field(default=100000.0, gt=0)
+    initial_capital: float = Field(default=100000.0, gt=0, allow_inf_nan=False)
+
+    @field_validator("currency")
+    @classmethod
+    def normalize_currency(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if not normalized.isalpha() or not 3 <= len(normalized) <= 8:
+            raise ValueError("currency must be a 3–8 character alphabetic code")
+        return normalized
 
 
 class PortfolioResponse(BaseModel):
@@ -72,6 +82,16 @@ async def list_portfolios(current_user: CurrentUser, db: DbSession):
 
 @router.post("", response_model=PortfolioResponse, status_code=status.HTTP_201_CREATED)
 async def create_portfolio(data: PortfolioCreate, current_user: CurrentUser, db: DbSession):
+    from app.services.plan_limits import count_user_resource, get_effective_limits
+
+    limits = await get_effective_limits(db, current_user.id)
+    portfolio_count = await count_user_resource(db, current_user.id, "portfolios")
+    if portfolio_count >= limits.portfolios:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Portfolio limit reached for the current plan",
+        )
+
     portfolio = Portfolio(
         user_id=current_user.id,
         name=data.name,
@@ -146,8 +166,9 @@ async def portfolio_valuation(
             raise
         except PortfolioValuationError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-        except Exception as exc:
-            raise HTTPException(status_code=502, detail=f"Broker valuation request failed: {exc}") from exc
+        except Exception:
+            logger.exception("broker_portfolio_valuation_failed user_id=%s broker=%s", current_user.id, broker_type.value)
+            raise HTTPException(status_code=502, detail="Broker valuation request failed")
     else:
         raise HTTPException(status_code=400, detail="Unsupported valuation source")
 

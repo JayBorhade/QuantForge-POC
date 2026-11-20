@@ -136,6 +136,13 @@ async def run_backtest(
             run_id=str(run.id),
         )
 
+    # Persist the run before publishing its identifier to Celery. A worker can
+    # start immediately; enqueueing before commit creates a race where it cannot
+    # find the run and then incorrectly marks the task as failed.
+    run.status = RunStatus.RUNNING
+    await log_audit(db, action="strategy.backtest", user_id=current_user.id, resource_id=str(run.id))
+    await db.commit()
+
     try:
         from app.tasks.strategy_tasks import run_backtest_task
 
@@ -146,12 +153,10 @@ async def run_backtest(
             data.end_date.isoformat(),
             data.initial_capital,
         )
-        run.status = RunStatus.RUNNING
     except Exception:
+        # The durable run already exists. Fall back to the app's in-process
+        # runner rather than losing a committed request.
         background_tasks.add_task(_execute)
-        run.status = RunStatus.RUNNING
-
-    await log_audit(db, action="strategy.backtest", user_id=current_user.id, resource_id=str(run.id))
 
     return BacktestResponse(
         run_id=run.id,
@@ -181,10 +186,10 @@ async def get_backtest_run(run_id: uuid.UUID, current_user: CurrentUser, db: DbS
     return {
         "run_id": str(run.id),
         "status": run.status.value,
-        "sharpe_ratio": float(run.sharpe_ratio) if run.sharpe_ratio else None,
-        "max_drawdown": float(run.max_drawdown) if run.max_drawdown else None,
-        "total_return": float(run.total_return) if run.total_return else None,
-        "win_rate": float(run.win_rate) if run.win_rate else None,
+        "sharpe_ratio": float(run.sharpe_ratio) if run.sharpe_ratio is not None else None,
+        "max_drawdown": float(run.max_drawdown) if run.max_drawdown is not None else None,
+        "total_return": float(run.total_return) if run.total_return is not None else None,
+        "win_rate": float(run.win_rate) if run.win_rate is not None else None,
         "total_trades": run.total_trades,
         "equity_curve": results.get("equity_curve"),
         "trade_history": results.get("trade_history"),
@@ -203,6 +208,27 @@ async def create_strategy(
     current_user: CurrentUser,
     db: DbSession,
 ):
+    from app.services.plan_limits import count_user_resource, get_effective_limits
+    from strategies.registry import validate_strategy_parameters
+
+    limits = await get_effective_limits(db, current_user.id)
+    strategy_count = await count_user_resource(db, current_user.id, "strategies")
+    if strategy_count >= limits.strategies:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Strategy limit reached for the current plan",
+        )
+
+    try:
+        validated_parameters = validate_strategy_parameters(
+            data.strategy_type.value, data.parameters
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
     if data.schedule_portfolio_id is not None:
         portfolio = await db.get(Portfolio, data.schedule_portfolio_id)
         if portfolio is None or portfolio.user_id != current_user.id:
@@ -219,7 +245,7 @@ async def create_strategy(
         description=data.description,
         strategy_type=data.strategy_type,
         symbol=data.symbol.upper(),
-        parameters=data.parameters,
+        parameters=validated_parameters,
         is_paper=data.is_paper,
         schedule_cron=data.schedule_cron,
         schedule_portfolio_id=data.schedule_portfolio_id,
@@ -251,6 +277,19 @@ async def update_strategy(
 ):
     strategy = await _get_user_strategy(db, strategy_id, current_user.id)
     update_data = data.model_dump(exclude_unset=True)
+    if "parameters" in update_data and update_data["parameters"] is not None:
+        from strategies.registry import validate_strategy_parameters
+
+        try:
+            update_data["parameters"] = validate_strategy_parameters(
+                strategy.strategy_type.value, update_data["parameters"]
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
+
     next_schedule = update_data.get("schedule_cron", strategy.schedule_cron)
     next_portfolio_id = update_data.get("schedule_portfolio_id", strategy.schedule_portfolio_id)
     next_is_paper = update_data.get("is_paper", strategy.is_paper)

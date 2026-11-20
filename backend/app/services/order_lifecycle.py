@@ -61,6 +61,14 @@ class OrderLifecycleService:
         if not locked.broker_order_id:
             raise ValueError("Cannot cancel an order without a broker order id")
         await self.broker.cancel_order(locked.broker_order_id)
+        # A successful cancel request is not proof the exchange cancelled the
+        # order; it may have filled while cancellation was in flight.
+        broker_state = await self.broker.get_order(locked.broker_order_id)
+        confirmed_status = OrderStatusMapper.from_broker_status(broker_state.status)
+        if confirmed_status is not OrderStatus.CANCELLED:
+            raise ValueError(
+                f"Broker has not confirmed cancellation; current status is {confirmed_status.value}"
+            )
         locked.status = OrderStatus.CANCELLED
         await log_audit(
             self.db,

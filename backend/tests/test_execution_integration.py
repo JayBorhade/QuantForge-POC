@@ -34,8 +34,11 @@ class ExecutionIntegrationTests(unittest.TestCase):
             Result(type("User", (), {"is_verified": True, "two_factor_enabled": True})()),
             Result(),
             Result(),
+            Result(),
         ])
         db.flush = AsyncMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
         broker = PaperBrokerAdapter()
 
         with patch("app.services.execution.RiskService.require_approval", new=AsyncMock()):

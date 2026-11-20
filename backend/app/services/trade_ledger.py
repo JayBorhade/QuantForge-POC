@@ -105,6 +105,9 @@ class TradeLedgerService:
             if remaining <= 0:
                 break
             close_qty = min(remaining, trade.quantity)
+            entry_fee = trade.fees * (close_qty / trade.quantity)
+            exit_fee = fee * (close_qty / quantity)
+            total_fees = entry_fee + exit_fee
             closed = Trade(
                 portfolio_id=order.portfolio_id,
                 strategy_id=order.strategy_id,
@@ -115,8 +118,8 @@ class TradeLedgerService:
                 quantity=close_qty,
                 entry_price=trade.entry_price,
                 exit_price=price,
-                pnl=(price - (trade.entry_price or entry_cost_before)) * close_qty,
-                fees=fee * (close_qty / quantity),
+                pnl=(price - (trade.entry_price or entry_cost_before)) * close_qty - total_fees,
+                fees=total_fees,
                 broker_order_id=order.broker_order_id,
                 opened_at=trade.opened_at,
                 closed_at=executed_at,
@@ -124,7 +127,7 @@ class TradeLedgerService:
             self.db.add(closed)
             last_closed_trade = closed
             trade.quantity -= close_qty
-            trade.fees += fee * (close_qty / quantity)
+            trade.fees -= entry_fee
             if trade.quantity == 0:
                 trade.status = TradeStatus.CLOSED
                 trade.closed_at = executed_at
@@ -141,7 +144,7 @@ class TradeLedgerService:
                 quantity=remaining,
                 entry_price=entry_cost_before,
                 exit_price=price,
-                pnl=(price - entry_cost_before) * remaining,
+                pnl=(price - entry_cost_before) * remaining - fee * (remaining / quantity),
                 fees=fee * (remaining / quantity),
                 broker_order_id=order.broker_order_id,
                 closed_at=executed_at,

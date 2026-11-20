@@ -6,6 +6,7 @@ boundary; simulation and metrics are provider-neutral under app.backtesting.
 
 from datetime import datetime
 from decimal import Decimal
+import math
 from typing import Any, Dict
 import pandas as pd
 import yfinance as yf
@@ -32,17 +33,31 @@ class BacktestEngine:
     ) -> Dict[str, Any]:
         if start_date >= end_date:
             raise ValueError("start_date must be earlier than end_date")
-        if initial_capital <= 0:
-            raise ValueError("initial_capital must be positive")
-        frame = self._fetch_historical(symbol, start_date, end_date)
+        if not math.isfinite(float(initial_capital)) or initial_capital <= 0:
+            raise ValueError("initial_capital must be finite and positive")
+        # Load enough warm-up history for long indicators (notably EMA-50)
+        # while only simulating trades inside the requested backtest window.
+        warmup_start = start_date - pd.Timedelta(days=120).to_pytimedelta()
+        frame = self._fetch_historical(symbol, warmup_start, end_date)
         if frame.empty:
             return {"error": "No data available for backtest period"}
 
         strategy = get_strategy(strategy_type, symbol, parameters or {}, mode="backtest")
         signals = strategy.generate_signals(frame)
+        dates = pd.to_datetime(frame["date"], errors="coerce")
+        start_day = pd.Timestamp(start_date).date()
+        end_day = pd.Timestamp(end_date).date()
+        in_window = dates.map(lambda value: value.date() if not pd.isna(value) else None).map(
+            lambda value: value is not None and start_day <= value < end_day
+        )
+        frame = frame.loc[in_window].reset_index(drop=True)
+        signals = signals.loc[in_window].reset_index(drop=True)
+        if frame.empty:
+            return {"error": "No data available for backtest period"}
+
         bars = [
             BacktestBar(
-                timestamp=pd.Timestamp(row["date"] if "date" in row else row["Date"]).to_pydatetime(),
+                timestamp=pd.Timestamp(row["date"]).to_pydatetime(),
                 open=Decimal(str(row["open"])), high=Decimal(str(row["high"])),
                 low=Decimal(str(row["low"])), close=Decimal(str(row["close"])),
             )
@@ -113,4 +128,12 @@ class BacktestEngine:
         ticker = yf.Ticker(symbol)
         frame = ticker.history(start=start.strftime("%Y-%m-%d"), end=end.strftime("%Y-%m-%d"))
         frame.columns = [str(c).lower() for c in frame.columns]
-        return frame.reset_index()
+        frame = frame.reset_index()
+        # Provider versions differ on whether the reset index is named Date,
+        # Datetime, or date. Normalize the contract once at the boundary.
+        frame.columns = [str(column).lower() for column in frame.columns]
+        if "date" not in frame.columns and "datetime" in frame.columns:
+            frame = frame.rename(columns={"datetime": "date"})
+        if "date" not in frame.columns:
+            raise ValueError("Historical data provider returned no date column")
+        return frame

@@ -103,7 +103,7 @@ class FillAccountingTests(unittest.TestCase):
         db.flush = AsyncMock()
         asyncio.run(FillService(db).apply_fill(order_id=order.id, quantity=Decimal("4"), price=Decimal("120"), fee=Decimal("2")))
         self.assertEqual(position.quantity, Decimal("6"))
-        self.assertEqual(position.realized_pnl, Decimal("80"))
+        self.assertEqual(position.realized_pnl, Decimal("78"))
         self.assertEqual(portfolio.cash_balance, Decimal("578"))
 
     def test_live_fill_does_not_mutate_portfolio_cash(self):
@@ -114,6 +114,39 @@ class FillAccountingTests(unittest.TestCase):
         db.flush = AsyncMock()
         asyncio.run(FillService(db).apply_fill(order_id=order.id, quantity=Decimal("1"), price=Decimal("50")))
         self.assertEqual(portfolio.cash_balance, Decimal("100"))
+
+    def test_buy_fee_is_included_in_position_cost_basis(self):
+        order = make_order(quantity="1")
+        portfolio = Portfolio(id=order.portfolio_id, cash_balance=Decimal("1000"))
+        position = Position(
+            portfolio_id=order.portfolio_id, symbol="NIFTY",
+            quantity=Decimal("0"), average_cost=Decimal("0"), realized_pnl=Decimal("0"),
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[Result(order), Result(portfolio), Result(position), Result(None)])
+        db.flush = AsyncMock()
+
+        asyncio.run(FillService(db).apply_fill(
+            order_id=order.id, quantity=Decimal("1"), price=Decimal("100"), fee=Decimal("1")
+        ))
+
+        self.assertEqual(position.average_cost, Decimal("101"))
+        self.assertEqual(portfolio.cash_balance, Decimal("899"))
+
+    def test_non_finite_fill_values_are_rejected_before_database_access(self):
+        for quantity, price, fee, message in (
+            (Decimal("NaN"), Decimal("100"), Decimal("0"), "quantity"),
+            (Decimal("1"), Decimal("Infinity"), Decimal("0"), "price"),
+            (Decimal("1"), Decimal("100"), Decimal("NaN"), "fee"),
+            (Decimal("1"), Decimal("100"), Decimal("Infinity"), "fee"),
+        ):
+            with self.subTest(quantity=quantity, price=price, fee=fee):
+                db = AsyncMock()
+                with self.assertRaisesRegex(FillAccountingError, message):
+                    asyncio.run(FillService(db).apply_fill(
+                        order_id=uuid.uuid4(), quantity=quantity, price=price, fee=fee
+                    ))
+                db.execute.assert_not_awaited()
 
 
 if __name__ == "__main__":

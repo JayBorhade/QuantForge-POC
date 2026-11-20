@@ -1,19 +1,22 @@
 """Broker connection routes backed by canonical broker adapters."""
 
+import logging
 import uuid
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession, VerifiedUser
 from app.brokers.factory import get_broker_adapter
 from app.core.encryption import decrypt_credentials, encrypt_credentials, mask_api_key
+from app.core.rate_limit import limiter
 from app.models.broker_token import BrokerToken, BrokerType
 from app.services.audit import log_audit
 
 router = APIRouter(prefix="/brokers", tags=["Brokers"])
+logger = logging.getLogger("quantforge.brokers")
 
 
 class BrokerConnectRequest(BaseModel):
@@ -62,7 +65,8 @@ async def list_brokers(current_user: CurrentUser, db: DbSession):
 
 
 @router.post("/connect", response_model=BrokerResponse, status_code=status.HTTP_201_CREATED)
-async def connect_broker(data: BrokerConnectRequest, current_user: VerifiedUser, db: DbSession):
+@limiter.limit("5/minute")
+async def connect_broker(data: BrokerConnectRequest, request: Request, current_user: VerifiedUser, db: DbSession):
     adapter = get_broker_adapter(
         data.broker.value,
         data.api_key,
@@ -133,8 +137,10 @@ async def disconnect_broker(broker_id: uuid.UUID, current_user: CurrentUser, db:
 
 
 @router.get("/quote/{symbol}")
+@limiter.limit("30/minute")
 async def get_quote(
     symbol: str,
+    request: Request,
     current_user: CurrentUser,
     db: DbSession,
     broker: str = "binance",
@@ -174,5 +180,6 @@ async def get_quote(
         return await adapter.get_quote(symbol)
     except HTTPException:
         raise
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Broker quote request failed: {exc}") from exc
+    except Exception:
+        logger.exception("broker_quote_failed user_id=%s broker=%s", current_user.id, broker_type.value)
+        raise HTTPException(status_code=502, detail="Broker quote request failed")

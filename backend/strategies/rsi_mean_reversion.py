@@ -43,19 +43,12 @@ class RSIMeanReversionStrategy(BaseStrategy):
         last_signal_idx = -cooldown
 
         for i in range(period, len(df)):
-            if i - last_signal_idx < cooldown:
-                continue
-
             rsi = df.iloc[i]["rsi"]
             price = df.iloc[i]["close"]
 
-            if position == 0 and rsi < oversold:
-                df.iloc[i, df.columns.get_loc("signal")] = Signal.BUY.value
-                position = 1
-                trailing_stop = price * (1 - trail_pct)
-                df.loc[df.index[i], "stop_loss"] = trailing_stop
-                last_signal_idx = i
-            elif position == 1:
+            # Cooldown suppresses new entries, never risk management. Trailing
+            # stops and RSI exits must still be evaluated on every open bar.
+            if position == 1:
                 trailing_stop = max(trailing_stop, price * (1 - trail_pct))
                 df.loc[df.index[i], "stop_loss"] = trailing_stop
                 if rsi > overbought or price < trailing_stop:
@@ -63,6 +56,17 @@ class RSIMeanReversionStrategy(BaseStrategy):
                     position = 0
                     trailing_stop = None
                     last_signal_idx = i
+                continue
+
+            if i - last_signal_idx < cooldown:
+                continue
+
+            if rsi < oversold:
+                df.iloc[i, df.columns.get_loc("signal")] = Signal.BUY.value
+                position = 1
+                trailing_stop = price * (1 - trail_pct)
+                df.loc[df.index[i], "stop_loss"] = trailing_stop
+                last_signal_idx = i
 
         df["trailing_stop"] = df["stop_loss"]
         return df

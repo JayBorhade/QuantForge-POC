@@ -1,14 +1,14 @@
 """Notification routes."""
 
 import uuid
-from typing import List, Optional
+from typing import List
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import select, update
 
 from app.api.deps import CurrentUser, DbSession
-from app.models.notification import Notification, NotificationType
+from app.models.notification import Notification
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
@@ -29,11 +29,11 @@ async def list_notifications(
     current_user: CurrentUser,
     db: DbSession,
     unread_only: bool = False,
-    limit: int = 50,
+    limit: int = Query(default=50, ge=1, le=200),
 ):
     query = select(Notification).where(Notification.user_id == current_user.id)
     if unread_only:
-        query = query.where(Notification.is_read == False)
+        query = query.where(Notification.is_read.is_(False))
     query = query.order_by(Notification.created_at.desc()).limit(limit)
     result = await db.execute(query)
     return [
@@ -68,7 +68,7 @@ async def mark_read(notification_id: uuid.UUID, current_user: CurrentUser, db: D
 async def mark_all_read(current_user: CurrentUser, db: DbSession):
     await db.execute(
         update(Notification)
-        .where(Notification.user_id == current_user.id, Notification.is_read == False)
+        .where(Notification.user_id == current_user.id, Notification.is_read.is_(False))
         .values(is_read=True)
     )
     return {"message": "All notifications marked as read"}

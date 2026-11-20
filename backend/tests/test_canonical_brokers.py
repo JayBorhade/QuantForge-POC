@@ -6,7 +6,7 @@ from decimal import Decimal
 from unittest.mock import AsyncMock, patch
 
 from app.brokers.angel_one import AngelOneBrokerAdapter
-from app.brokers.base import BrokerOrderRequest
+from app.brokers.base import BrokerOrderRequest, BrokerSubmissionRejected
 from app.brokers.binance import BinanceBrokerAdapter
 from app.brokers.zerodha import ZerodhaBrokerAdapter
 from app.models.order import OrderSide, OrderType
@@ -53,7 +53,7 @@ class CanonicalBrokerTests(unittest.TestCase):
 
     def test_zerodha_requires_exchange_and_product(self):
         broker = ZerodhaBrokerAdapter("key", "secret", "token")
-        with self.assertRaises(ValueError):
+        with self.assertRaises(BrokerSubmissionRejected):
             asyncio.run(broker.submit_order(self.request()))
 
     def test_zerodha_maps_successful_submission(self):
@@ -152,12 +152,12 @@ class CanonicalBrokerTests(unittest.TestCase):
 
     def test_angel_one_requires_instrument_metadata(self):
         broker = AngelOneBrokerAdapter("key", "secret", "token")
-        with self.assertRaises(ValueError):
+        with self.assertRaises(BrokerSubmissionRejected):
             asyncio.run(broker.submit_order(self.request()))
 
     def test_angel_one_maps_submission(self):
         broker = AngelOneBrokerAdapter("key", "secret", "token")
-        response = FakeResponse(200, {"status": True, "data": {"orderid": "angel-1"}})
+        response = FakeResponse(200, {"status": True, "data": {"orderid": "angel-1", "uniqueorderid": "unique-1"}})
         client = FakeClient(response)
         with patch("app.brokers.angel_one.httpx.AsyncClient", return_value=client):
             result = asyncio.run(
@@ -171,7 +171,7 @@ class CanonicalBrokerTests(unittest.TestCase):
                     )
                 )
             )
-        self.assertEqual(result.broker_order_id, "angel-1")
+        self.assertEqual(result.broker_order_id, "angelone:angel-1:unique-1")
         self.assertEqual(result.status, "submitted")
 
 

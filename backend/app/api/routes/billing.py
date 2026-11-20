@@ -1,5 +1,6 @@
 """Stripe billing routes."""
 
+import logging
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -24,6 +25,7 @@ from app.services.stripe_service import (
 )
 
 router = APIRouter(prefix="/billing", tags=["Billing"])
+logger = logging.getLogger("quantforge.billing")
 
 
 class CheckoutRequest(BaseModel):
@@ -38,10 +40,13 @@ class PlanInfo(BaseModel):
     stripe_enabled: bool
 
 
+# Advertise only capabilities implemented by this repository. Live broker
+# execution and provider-backed AI insights are not enabled, so they must not
+# be sold as plan features.
 PLAN_FEATURES = {
-    "free": ["2 strategies", "Paper trading", "Basic backtest"],
-    "starter": ["5 strategies", "Paper + limited live", "Email alerts"],
-    "pro": ["Unlimited strategies", "Full live trading", "AI insights", "Priority support"],
+    "free": ["Strategy research", "Paper trading", "Basic backtesting"],
+    "starter": ["Paper trading", "Backtesting", "Email alerts when SMTP is configured"],
+    "pro": ["Advanced backtest analytics", "Paper trading", "Portfolio risk analytics"],
 }
 
 
@@ -117,8 +122,9 @@ async def create_checkout(
         )
         await log_audit(db, action="billing.checkout", user_id=current_user.id, details={"plan": data.plan})
         return result
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        logger.exception("stripe_checkout_session_creation_failed user_id=%s plan=%s", current_user.id, data.plan)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Unable to create checkout session")
 
 
 @router.post("/portal")
@@ -133,8 +139,9 @@ async def billing_portal(current_user: CurrentUser, db: DbSession) -> Dict[str, 
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No billing account found")
     try:
         return await create_portal_session(sub.stripe_customer_id)
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        logger.exception("stripe_billing_portal_creation_failed user_id=%s", current_user.id)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Unable to create billing portal session")
 
 
 @router.post("/webhook")
@@ -147,8 +154,9 @@ async def stripe_webhook(request: Request, db: DbSession):
 
     try:
         event = handle_webhook_event(payload, sig)
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        logger.warning("stripe_webhook_signature_verification_failed")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid webhook signature")
 
     event_id = event.get("id")
     event_type = event["type"]
@@ -184,17 +192,25 @@ async def stripe_webhook(request: Request, db: DbSession):
 
     obj = event["data"]
 
-    if event_type == "checkout.session.completed":
+    if event_type in {"checkout.session.completed", "checkout.session.async_payment_succeeded"}:
         user_id = obj.get("metadata", {}).get("user_id")
-        plan = obj.get("metadata", {}).get("plan", "starter")
+        plan = obj.get("metadata", {}).get("plan")
         customer_id = obj.get("customer")
-        if user_id:
+        subscription_id = obj.get("subscription")
+        payment_eligible = obj.get("payment_status") in {"paid", "no_payment_required"}
+        if (
+            user_id
+            and plan in PLAN_CONFIG
+            and customer_id
+            and subscription_id
+            and payment_eligible
+        ):
             await _update_subscription(
                 db,
                 uuid.UUID(user_id),
                 plan,
                 customer_id,
-                obj.get("subscription"),
+                subscription_id,
                 SubscriptionStatus.ACTIVE,
             )
 
@@ -202,12 +218,20 @@ async def stripe_webhook(request: Request, db: DbSession):
         customer_id = obj.get("customer")
         status_map = {
             "active": SubscriptionStatus.ACTIVE,
+            "trialing": SubscriptionStatus.TRIAL,
             "canceled": SubscriptionStatus.CANCELLED,
             "past_due": SubscriptionStatus.EXPIRED,
+            "unpaid": SubscriptionStatus.EXPIRED,
+            "incomplete": SubscriptionStatus.EXPIRED,
+            "incomplete_expired": SubscriptionStatus.EXPIRED,
+            "paused": SubscriptionStatus.EXPIRED,
         }
-        sub_status = status_map.get(obj.get("status"), SubscriptionStatus.ACTIVE)
+        # Unknown provider states must never grant paid entitlements.
+        sub_status = status_map.get(obj.get("status"), SubscriptionStatus.EXPIRED)
         price_id = obj.get("items", {}).get("data", [{}])[0].get("price", {}).get("id")
         plan = map_stripe_plan(price_id)
+        if sub_status not in {SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIAL}:
+            plan = "free"
         result = await db.execute(
             select(Subscription).where(Subscription.stripe_customer_id == customer_id)
         )

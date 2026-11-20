@@ -3,6 +3,7 @@
 import os
 
 from celery import Celery
+from celery.schedules import crontab
 
 from app.core.config import get_settings
 
@@ -31,6 +32,11 @@ celery_app.conf.update(
             "task": "app.tasks.portfolio_tasks.record_portfolio_snapshots",
             "schedule": 300.0,
             "options": {"expires": 295},
+        },
+        "reset-daily-portfolio-pnl": {
+            "task": "app.tasks.portfolio_tasks.reset_daily_portfolio_pnl",
+            "schedule": crontab(hour=0, minute=0),
+            "options": {"expires": 300},
         },
         "reconcile-open-broker-orders": {
             "task": "app.tasks.reconciliation_tasks.reconcile_broker_orders",

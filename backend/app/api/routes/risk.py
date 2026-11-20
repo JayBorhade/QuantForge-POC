@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.api.deps import CurrentUser, DbSession
 from app.models.audit_log import AuditLog
@@ -26,7 +26,7 @@ class RiskLimitUpdate(BaseModel):
     max_symbol_exposure: Decimal | None = Field(default=None, gt=0)
     max_strategy_exposure: Decimal | None = Field(default=None, gt=0)
     max_strategy_allocation_pct: Decimal | None = Field(default=None, gt=0, le=1)
-    kill_switch: bool = False
+    kill_switch: bool | None = None
 
     @model_validator(mode="after")
     def validate_order_limit(self):
@@ -130,7 +130,10 @@ async def get_risk_events(
         .where(
             AuditLog.resource == "portfolio",
             AuditLog.resource_id == str(portfolio.id),
-            AuditLog.action.like("risk%"),
+            or_(
+                AuditLog.action.like("risk%"),
+                AuditLog.action == "order.risk_rejected",
+            ),
         )
         .order_by(AuditLog.created_at.desc())
         .limit(limit)
@@ -162,7 +165,9 @@ async def update_risk_limits(
         limit = RiskLimit(portfolio_id=portfolio.id)
         db.add(limit)
 
-    for field, value in data.model_dump().items():
+    # This endpoint accepts partial updates for backwards compatibility.
+    # Omitted fields must not reset existing limits or disable the kill switch.
+    for field, value in data.model_dump(exclude_unset=True).items():
         setattr(limit, field, value)
 
     await db.flush()

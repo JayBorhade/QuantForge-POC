@@ -1,5 +1,6 @@
 """Authentication service."""
 
+import json
 import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -12,13 +13,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from user_agents import parse as parse_ua
 
 from app.core.config import get_settings
+from app.core.encryption import decrypt_mfa_secret
 from app.core.sanitize import sanitize_email, sanitize_phone, sanitize_string
 from app.core.security import (
+    hash_one_time_token,
     create_access_token,
     create_refresh_token,
     generate_otp,
     generate_token,
     hash_password,
+    needs_password_rehash,
     verify_password,
 )
 from app.models.notification import Notification, NotificationType
@@ -45,7 +49,8 @@ class AuthService:
             full_name=sanitize_string(data.full_name, 255) or data.full_name,
             phone=sanitize_phone(data.phone) if data.phone else None,
             hashed_password=hash_password(data.password),
-            email_verification_token=generate_token(),
+            email_verification_token=hash_one_time_token(generate_token()),
+            email_verification_expires=datetime.now(timezone.utc) + timedelta(hours=24),
         )
         db.add(user)
         await db.flush()
@@ -92,11 +97,14 @@ class AuthService:
         otp_code: Optional[str] = None,
     ) -> Tuple[User, str, str]:
         email = sanitize_email(email)
-        result = await db.execute(select(User).where(User.email == email))
+        result = await db.execute(select(User).where(User.email == email).with_for_update())
         user = result.scalar_one_or_none()
 
         if not user or not verify_password(password, user.hashed_password):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+        if needs_password_rehash(user.hashed_password):
+            user.hashed_password = hash_password(password)
 
         if user.is_banned:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account suspended")
@@ -107,8 +115,7 @@ class AuthService:
         if user.two_factor_enabled:
             if not otp_code:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="2FA code required")
-            totp = pyotp.TOTP(user.two_factor_secret)
-            if not totp.verify(otp_code, valid_window=1):
+            if not AuthService.verify_totp_once(user, otp_code) and not AuthService.consume_recovery_code(user, otp_code):
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid 2FA code")
 
         jti = generate_token()[:32]
@@ -155,26 +162,45 @@ class AuthService:
 
         jti = payload.get("jti")
         user_id = payload.get("sub")
+        try:
+            parsed_user_id = uuid.UUID(str(user_id))
+        except (TypeError, ValueError, AttributeError):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+        if not isinstance(jti, str) or not jti:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
 
+        # Lock the session row while rotating it. Concurrent refresh attempts
+        # serialize on databases that support row-level locks, so only one
+        # request can consume a refresh token.
         result = await db.execute(
-            select(UserSession).where(
+            select(UserSession)
+            .where(
                 UserSession.refresh_token_jti == jti,
+                UserSession.user_id == parsed_user_id,
                 UserSession.is_active == True,
             )
+            .with_for_update()
         )
         session = result.scalar_one_or_none()
-        if not session or session.expires_at < datetime.now(timezone.utc):
+        if not session or session.expires_at <= datetime.now(timezone.utc):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired")
 
+        user_result = await db.execute(select(User).where(User.id == parsed_user_id))
+        user = user_result.scalar_one_or_none()
+        if not user or not user.is_active or user.is_banned:
+            session.is_active = False
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Account unavailable")
+
         session.is_active = False
+        session.last_used_at = datetime.now(timezone.utc)
         new_jti = generate_token()[:32]
-        new_refresh = create_refresh_token(user_id, new_jti)
-        new_access = create_access_token(user_id, {"session_jti": new_jti})
+        new_refresh = create_refresh_token(str(parsed_user_id), new_jti)
+        new_access = create_access_token(str(parsed_user_id), {"role": user.role.value, "session_jti": new_jti})
 
         ua_string = request.headers.get("user-agent", "")
         ua = parse_ua(ua_string)
         new_session = UserSession(
-            user_id=uuid.UUID(user_id),
+            user_id=parsed_user_id,
             refresh_token_jti=new_jti,
             device_name=session.device_name,
             device_type=session.device_type,
@@ -217,6 +243,40 @@ class AuthService:
 
         await log_audit(db, action="user.logout", user_id=user_id)
 
+    @staticmethod
+    def verify_totp_once(user: User, otp_code: str) -> bool:
+        """Accept a TOTP time step only once per account."""
+        if not user.two_factor_secret or not otp_code or not otp_code.isdigit():
+            return False
+        try:
+            totp = pyotp.TOTP(decrypt_mfa_secret(user.two_factor_secret))
+            now = datetime.now(timezone.utc)
+            current_step = totp.timecode(now)
+            for step in (current_step - 1, current_step, current_step + 1):
+                candidate_time = now + timedelta(seconds=(step - current_step) * totp.interval)
+                if totp.verify(otp_code, for_time=candidate_time, valid_window=0):
+                    if user.last_totp_step is not None and step <= user.last_totp_step:
+                        return False
+                    user.last_totp_step = step
+                    return True
+        except (TypeError, ValueError):
+            return False
+        return False
+    @staticmethod
+    def consume_recovery_code(user: User, code: str) -> bool:
+        """Consume a single hashed recovery code exactly once."""
+        if not code or not user.two_factor_recovery_codes:
+            return False
+        try:
+            stored = json.loads(user.two_factor_recovery_codes)
+        except (TypeError, ValueError):
+            return False
+        digest = hash_one_time_token(code)
+        if digest not in stored:
+            return False
+        stored.remove(digest)
+        user.two_factor_recovery_codes = json.dumps(stored)
+        return True
     @staticmethod
     def setup_2fa(user: User) -> Tuple[str, str]:
         secret = pyotp.random_base32()

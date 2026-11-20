@@ -3,6 +3,7 @@
 from contextlib import contextmanager
 
 from sqlalchemy import create_engine
+from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
@@ -10,7 +11,7 @@ from app.core.config import get_settings
 settings = get_settings()
 sync_url = settings.database_url.replace("+asyncpg", "").replace("postgresql+asyncpg", "postgresql+psycopg2")
 
-engine = create_engine(sync_url, pool_pre_ping=True)
+engine = create_engine(sync_url, poolclass=NullPool, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 

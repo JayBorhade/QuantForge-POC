@@ -99,7 +99,8 @@ def run_backtest_for_strategy(
             if "error" in result:
                 run.status = RunStatus.FAILED
                 run.identity_key = None
-                run.error_message = result["error"]
+                run.error_message = str(result["error"])[:2000]
+                run.completed_at = datetime.now(timezone.utc)
             else:
                 run.status = RunStatus.COMPLETED
                 run.sharpe_ratio = Decimal(str(result.get("sharpe_ratio", 0)))
@@ -133,4 +134,8 @@ def run_backtest_for_strategy(
             run.worker_token = None
             run.worker_started_at = None
             run.identity_key = None
+            # Persist the terminal failure before propagating the error. The
+            # session context manager rolls back on exceptions, so without this
+            # explicit commit callers would see a stale RUNNING row forever.
+            db.commit()
             raise
