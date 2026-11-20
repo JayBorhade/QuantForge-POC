@@ -101,6 +101,14 @@ class Settings(BaseSettings):
             raise ValueError("DATABASE_URL must not use a default or placeholder database password")
         if not self.encryption_key:
             raise ValueError("ENCRYPTION_KEY must be explicitly configured outside local/test environments")
+        encryption_key = self.encryption_key.strip()
+        lowered_encryption_key = encryption_key.lower()
+        if len(encryption_key.encode("utf-8")) < 32 or len(set(encryption_key)) < 12:
+            raise ValueError("ENCRYPTION_KEY must be a high-entropy secret of at least 32 bytes")
+        if any(marker in lowered_encryption_key for marker in ("change-me", "replace-me", "example", "your-", "password", "secret")):
+            raise ValueError("ENCRYPTION_KEY must not contain a known placeholder")
+        if encryption_key in {self.secret_key, self.jwt_secret_key}:
+            raise ValueError("ENCRYPTION_KEY must be distinct from SECRET_KEY and JWT_SECRET_KEY")
         if not self.cookie_secure:
             raise ValueError("COOKIE_SECURE must be true outside local/test environments")
         if not self.cookie_domain.strip() or self.cookie_domain.strip().lower() in {"localhost", "127.0.0.1"}:
